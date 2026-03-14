@@ -1,14 +1,13 @@
-import { Geist, Geist_Mono, Raleway } from "next/font/google"
+import { Inter } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
-import { cn } from "@/lib/utils";
+import { AppSidebar } from "@/components/app-sidebar"
+import { cn } from "@/lib/utils"
 
-const raleway = Raleway({subsets:['latin'],variable:'--font-sans'})
-
-const fontMono = Geist_Mono({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-mono",
+  variable: "--font-sans",
 })
 
 export default function RootLayout({
@@ -20,10 +19,15 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn("antialiased", fontMono.variable, "font-sans", raleway.variable)}
+      className={cn("antialiased", inter.variable, "font-sans")}
     >
-      <body>
-        <ThemeProvider>{children}</ThemeProvider>
+      <body className="min-h-svh bg-[#f8f9fa]">
+        <ThemeProvider>
+          <div className="flex h-svh">
+            <AppSidebar />
+            <main className="min-h-0 flex-1 p-8">{children}</main>
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   )
