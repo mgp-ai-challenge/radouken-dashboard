@@ -15,18 +15,18 @@ async function searchIntentCompanies(): Promise<HsCompany[]> {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   const afterMs = thirtyDaysAgo.getTime()
 
-  // Search companies where g2_researched_date was updated in last 30 days
-  // If g2_researched_date doesn't exist, fall back to hs_lastmodifieddate as proxy
+  // Filter companies that have G2 intent data and were modified in the last 30 days
   const body = {
     filterGroups: [
       {
         filters: [
-          { propertyName: "g2_researched_date", operator: "GTE", value: afterMs },
+          { propertyName: "g2_buyer_intent_activity_level", operator: "HAS_PROPERTY" },
+          { propertyName: "hs_lastmodifieddate", operator: "GTE", value: afterMs },
         ],
       },
     ],
-    properties: ["name", "domain", "g2_buying_intent_score", "g2_researched_date"],
-    sorts: [{ propertyName: "g2_researched_date", direction: "DESCENDING" }],
+    properties: ["name", "domain", "g2_intent_score", "g2_buyer_intent_activity_level", "g2_buyer_intent_buying_stage", "hs_lastmodifieddate"],
+    sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
     limit: 50,
   }
 
@@ -64,7 +64,7 @@ export async function GET() {
     let totalThisWeek = 0
 
     const result = companies.map((c) => {
-      const lastSignalAt = c.properties.g2_researched_date ?? ""
+      const lastSignalAt = c.properties.hs_lastmodifieddate ?? ""
       const signalDate = lastSignalAt ? new Date(lastSignalAt) : null
       if (signalDate) {
         if (signalDate >= thisMonthStart) totalThisMonth++
@@ -74,8 +74,8 @@ export async function GET() {
         id: c.id,
         name: c.properties.name ?? "",
         domain: c.properties.domain ?? "",
-        intentScore: c.properties.g2_buying_intent_score
-          ? Number(c.properties.g2_buying_intent_score)
+        intentScore: c.properties.g2_intent_score
+          ? Number(c.properties.g2_intent_score)
           : null,
         lastSignalAt,
       }
