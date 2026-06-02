@@ -43,6 +43,9 @@ export interface G2IntentCompany {
   name: string
   domain: string
   intentScore: number | null
+  activityLevel: "low" | "medium" | "high" | null
+  buyingStage: "awareness" | "consideration" | "decision" | null
+  intentDetails: string | null
   lastSignalAt: string    // ISO date
 }
 

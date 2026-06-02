@@ -25,7 +25,7 @@ async function searchIntentCompanies(): Promise<HsCompany[]> {
         ],
       },
     ],
-    properties: ["name", "domain", "g2_intent_score", "g2_buyer_intent_activity_level", "g2_buyer_intent_buying_stage", "hs_lastmodifieddate"],
+    properties: ["name", "domain", "g2_intent_score", "g2_buyer_intent_activity_level", "g2_buyer_intent_buying_stage", "g2_buyer_intent_details", "hs_lastmodifieddate"],
     sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
     limit: 50,
   }
@@ -77,11 +77,15 @@ export async function GET() {
         intentScore: c.properties.g2_intent_score
           ? Number(c.properties.g2_intent_score)
           : null,
+        activityLevel: c.properties.g2_buyer_intent_activity_level ?? null,
+        buyingStage: c.properties.g2_buyer_intent_buying_stage ?? null,
+        intentDetails: c.properties.g2_buyer_intent_details ?? null,
         lastSignalAt,
       }
     })
 
-    return NextResponse.json({ companies: result, totalThisMonth, totalThisWeek })
+    const hubspotPortalId = "5606823"
+    return NextResponse.json({ companies: result, totalThisMonth, totalThisWeek, hubspotPortalId })
   } catch (e) {
     console.error("[g2/intent]", e)
     return NextResponse.json({ error: "Failed to load G2 intent" }, { status: 500 })

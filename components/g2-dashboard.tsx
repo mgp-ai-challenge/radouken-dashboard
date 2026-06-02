@@ -184,7 +184,7 @@ function KpiCard({
 type ReviewsData  = { product: Pick<G2Product, "starRating" | "reviewsCount">; reviews: G2Review[] }
 type ProfileData  = { rank: G2Rank; weeklyViews: G2ProfileView[]; totalViewsThisMonth: number; totalViewsLastMonth: number }
 type CampaignsData = { campaigns: G2Campaign[] }
-type IntentData   = { companies: G2IntentCompany[]; totalThisMonth: number; totalThisWeek: number }
+type IntentData   = { companies: G2IntentCompany[]; totalThisMonth: number; totalThisWeek: number; hubspotPortalId: string }
 
 // ─── Star rating helper ───────────────────────────────────────────────────────
 function StarRating({ rating }: { rating: number }) {
@@ -508,30 +508,57 @@ export function G2Dashboard() {
             <table aria-label="G2 Buyer Intent Companies" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr>
-                  {["Company", "Domain", "Intent Score", "Last Signal"].map((col) => (
-                    <th key={col} scope="col" style={{ textAlign: col === "Company" || col === "Domain" ? "left" : "right", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
+                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal"].map((col) => (
+                    <th key={col} scope="col" style={{ textAlign: col === "Company" ? "left" : "center", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
                       {col}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {intent.companies.slice(0, 50).map((co, i) => (
-                  <tr key={co.id} style={{ borderBottom: i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none" }}>
-                    <td style={{ padding: "10px 10px", color: C.sage, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {co.name || "—"}
-                    </td>
-                    <td style={{ padding: "10px 10px", fontFamily: MONO, fontSize: "11px", color: C.muted }}>
-                      {co.domain || "—"}
-                    </td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: co.intentScore !== null ? C.sageLight : C.muted }}>
-                      {co.intentScore !== null ? co.intentScore : "—"}
-                    </td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", color: C.muted, fontSize: "11px" }}>
-                      {relTime(co.lastSignalAt)}
-                    </td>
-                  </tr>
-                ))}
+                {intent.companies.slice(0, 50).map((co, i) => {
+                  const activityColor = co.activityLevel === "high" ? C.accent : co.activityLevel === "medium" ? C.amber : C.slate
+                  const activityBg   = co.activityLevel === "high" ? C.accentDim : co.activityLevel === "medium" ? C.amberDim : "rgba(124,140,148,0.10)"
+                  const stageColor   = co.buyingStage === "decision" ? C.accent : co.buyingStage === "consideration" ? C.blue : C.slate
+                  const stageBg      = co.buyingStage === "decision" ? C.accentDim : co.buyingStage === "consideration" ? "rgba(76,158,245,0.12)" : "rgba(124,140,148,0.10)"
+                  const hsUrl        = `https://app.hubspot.com/contacts/${intent.hubspotPortalId}/company/${co.id}`
+                  return (
+                    <tr key={co.id} style={{ borderBottom: i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none" }}>
+                      <td style={{ padding: "10px 10px", maxWidth: "220px" }}>
+                        <a href={hsUrl} target="_blank" rel="noreferrer" style={{ color: C.sage, textDecoration: "none", fontWeight: 500 }}
+                          onMouseEnter={(e) => (e.currentTarget.style.color = C.accentBright)}
+                          onMouseLeave={(e) => (e.currentTarget.style.color = C.sage)}>
+                          {co.name || "—"}
+                        </a>
+                        {co.intentDetails && (
+                          <p style={{ fontSize: "10px", color: C.muted, marginTop: "3px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } as React.CSSProperties}>
+                            {co.intentDetails}
+                          </p>
+                        )}
+                      </td>
+                      <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                        {co.activityLevel ? (
+                          <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: activityBg, color: activityColor, textTransform: "capitalize" }}>
+                            {co.activityLevel}
+                          </span>
+                        ) : <span style={{ color: C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                        {co.buyingStage ? (
+                          <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: stageBg, color: stageColor, textTransform: "capitalize" }}>
+                            {co.buyingStage}
+                          </span>
+                        ) : <span style={{ color: C.muted }}>—</span>}
+                      </td>
+                      <td style={{ padding: "10px 10px", textAlign: "center", fontFamily: MONO, color: co.intentScore !== null ? C.sageLight : C.muted }}>
+                        {co.intentScore !== null ? co.intentScore : "—"}
+                      </td>
+                      <td style={{ padding: "10px 10px", textAlign: "center", color: C.muted, fontSize: "11px" }}>
+                        {relTime(co.lastSignalAt)}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
