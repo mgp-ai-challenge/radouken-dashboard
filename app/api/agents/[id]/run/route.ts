@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readAgentStates, writeAgentState, AGENT_DEFAULTS, AgentState } from "@/lib/agents"
 import { generateWeeklyReport } from "@/lib/weekly-report"
+import { scanCodebase } from "@/lib/bug-scanner"
 
 // Stubs — each will be replaced with real logic as agents are built
 async function runLemlistSync(): Promise<Record<string, number | string>> {
@@ -37,12 +38,18 @@ async function runWeeklyReport(): Promise<Record<string, number | string>> {
   }
 }
 
+async function runBugScan(): Promise<Record<string, number | string>> {
+  const { filesScanned, issuesFound } = await scanCodebase()
+  return { filesScanned, issuesFound }
+}
+
 const runners: Record<string, () => Promise<Record<string, number | string>>> = {
   "lemlist-sync": runLemlistSync,
   "hubspot-sync": runHubspotSync,
   attribution: runAttribution,
   communications: runCommunications,
   "weekly-report": runWeeklyReport,
+  "code-review": runBugScan,
 }
 
 export async function POST(

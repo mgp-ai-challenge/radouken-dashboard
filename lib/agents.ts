@@ -46,6 +46,12 @@ export const AGENT_DEFAULTS: Omit<AgentState, "status" | "lastRunAt" | "lastRunD
     description: "Generates the weekly self-serve performance report and delivers it to Telegram and Slack.",
     schedule: "Every Wednesday 9am",
   },
+  {
+    id: "code-review",
+    name: "Code Review",
+    description: "Scans all source files for bugs, security issues, and optimization opportunities.",
+    schedule: "On demand",
+  },
 ]
 
 const STATE_FILE = path.join(process.cwd(), ".agents-state.json")
