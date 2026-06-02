@@ -31,15 +31,17 @@
 2. `GET /v1/android/search_entities?term={encodedName}&entity_type=publisher&auth_token={token}`
    - Same shape
 3. For each store where a publisher was found, fetch their top app:
-   `GET /v1/{store}/publishers/{publisher_id}/apps?limit=1&auth_token={token}`
-   - Returns array of app objects; take first (highest downloads)
-   - Relevant fields (verify exact names at implementation): `app_name` / `name`, `category` / `primary_genre`, `units` / `monthly_downloads`, `rating`, `app_id` (to construct store URL)
+   `GET /v1/{store}/publishers/{publisher_id}/apps?limit=1&sort_by=downloads&auth_token={token}`
+   - `sort_by=downloads` is **required** — omitting it returns a 400 error
+   - Response shape: `{ meta: { count }, data: [ ...apps ] }` — take `data[0]`
+   - Confirmed field names from live API: `app_id` (number), `name` (string), `humanized_worldwide_last_30_days_downloads` (pre-formatted string e.g. `"50M"`), `os`
+   - `rating` and `category` are **not** returned by this endpoint — set both to `null`
 
 **Store URLs:**
 - iOS: `https://apps.apple.com/app/id{app_id}`
 - Android: `https://play.google.com/store/apps/details?id={app_id}`
 
-> **Note:** Exact field names in SensorTower responses must be verified against live API responses during implementation. The API uses snake_case throughout.
+**Search response confirmed fields:** `publisher_id` (number), `publisher_name` (string), `os` (string), `app_count` (number)
 
 ---
 
@@ -84,10 +86,8 @@ export interface AppEnrichment {
   hasApp: boolean
   platform: "ios" | "android" | "both" | null
   appName: string | null
-  appCategory: string | null
-  monthlyDownloads: number | null
-  storeRating: number | null
-  storeUrl: string | null  // iOS preferred if both exist
+  monthlyDownloads: string | null  // pre-formatted by SensorTower e.g. "50M", "1.2M"
+  storeUrl: string | null          // iOS preferred if both exist
 }
 ```
 
@@ -117,9 +117,9 @@ export interface AppEnrichment {
 **Implementation notes:**
 - Process companies in batches of 20 using a concurrency-limited `Promise.allSettled`
 - Per company: search iOS + Android in parallel → for stores with a match, fetch top app in parallel → merge
-- If both iOS and Android found: `platform = "both"`, use iOS app details for `appName`/`appCategory`/`storeRating`/`storeUrl`, sum `monthlyDownloads` from both
-- If no match on either store: `{ hasApp: false, platform: null, appName: null, ... }`
-- If SensorTower throws for a company: return `{ companyId, hasApp: false, platform: null, appName: null, appCategory: null, monthlyDownloads: null, storeRating: null, storeUrl: null }`
+- If both iOS and Android found: `platform = "both"`, use iOS `appName` and `storeUrl`; concatenate downloads as `"{ios} iOS + {android} Android"` string
+- If no match on either store: `{ hasApp: false, platform: null, appName: null, monthlyDownloads: null, storeUrl: null }`
+- If SensorTower throws for a company: return `{ companyId, hasApp: false, platform: null, appName: null, monthlyDownloads: null, storeUrl: null }`
 - Return `export const dynamic = "force-dynamic"`
 
 **Concurrency helper** (implement inline in route, no separate utility):
@@ -223,22 +223,10 @@ After each `<tr>`, conditionally render an expansion `<tr>` when `expandedRow ==
               <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>App</p>
               <p style={{ fontSize: "13px", fontWeight: 600, color: C.sageLight }}>{e.appName}</p>
             </div>
-            {e.appCategory && (
+            {e.monthlyDownloads && (
               <div>
-                <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>Category</p>
-                <p style={{ fontSize: "13px", color: C.sage }}>{e.appCategory}</p>
-              </div>
-            )}
-            {e.monthlyDownloads !== null && (
-              <div>
-                <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>Est. Downloads/mo</p>
-                <p style={{ fontSize: "13px", fontFamily: MONO, color: C.sageLight }}>{fmtNum(e.monthlyDownloads)}</p>
-              </div>
-            )}
-            {e.storeRating !== null && (
-              <div>
-                <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>Store Rating</p>
-                <p style={{ fontSize: "13px", fontFamily: MONO, color: C.sageLight }}>{e.storeRating.toFixed(1)} ★</p>
+                <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>Downloads/mo</p>
+                <p style={{ fontSize: "13px", fontFamily: MONO, color: C.sageLight }}>{e.monthlyDownloads}</p>
               </div>
             )}
             {e.storeUrl && (
