@@ -29,6 +29,12 @@
     --chart-4: oklch(0.508 0.118 165.612);
     --chart-5: oklch(0.432 0.095 166.913);
     --radius: 0.625rem;
+    --bm-navy: #1A3A5C;
+    --bm-blue: #2E75B6;
+    --bm-green: #1D9E75;
+    --bm-red: #E24B4A;
+    --bm-amber: #F59E0B;
+    --bm-purple: #7C6FAD;
     --sidebar: oklch(0.985 0.001 106.423);
     --sidebar-foreground: oklch(0.147 0.004 49.25);
     --sidebar-primary: oklch(0.596 0.145 163.225);
@@ -113,6 +119,11 @@
     --radius-2xl: calc(var(--radius) * 1.8);
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@keyframes bm-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 @layer base {

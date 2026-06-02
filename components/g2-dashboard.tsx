@@ -29,11 +29,9 @@ const C = {
   cardAlt:      "#0a1d14",
   border:       "#0e2b1d",
   borderAccent: "rgba(5,199,155,0.18)",
-  borderGlow:   "rgba(5,199,155,0.10)",
   accent:       "#05c79b",
   accentBright: "#00e8b0",
   accentDim:    "rgba(5,199,155,0.13)",
-  accentGlow:   "rgba(5,199,155,0.06)",
   sage:         "#c8ddd5",
   sageLight:    "#e8f3ef",
   muted:        "#3d6b56",
@@ -43,7 +41,6 @@ const C = {
   red:          "#ef4444",
   redDim:       "rgba(239,68,68,0.12)",
   blue:         "#4c9ef5",
-  blueDim:      "rgba(76,158,245,0.15)",
   purple:       "#9b7ff5",
   grid:         "rgba(5,199,155,0.045)",
 }
@@ -449,11 +446,11 @@ export function G2Dashboard() {
           </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+            <table aria-label="Paid Campaigns" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr>
                   {["Campaign", "Status", "Impressions", "Clicks", "CTR", "Spend"].map((col) => (
-                    <th key={col} style={{ textAlign: col === "Campaign" ? "left" : "right", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
+                    <th key={col} scope="col" style={{ textAlign: col === "Campaign" ? "left" : "right", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
                       {col}
                     </th>
                   ))}
@@ -508,11 +505,11 @@ export function G2Dashboard() {
           </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+            <table aria-label="G2 Buyer Intent Companies" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr>
                   {["Company", "Domain", "Intent Score", "Last Signal"].map((col) => (
-                    <th key={col} style={{ textAlign: col === "Company" || col === "Domain" ? "left" : "right", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
+                    <th key={col} scope="col" style={{ textAlign: col === "Company" || col === "Domain" ? "left" : "right", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
                       {col}
                     </th>
                   ))}
