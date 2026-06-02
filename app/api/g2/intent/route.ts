@@ -3,14 +3,15 @@ import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
-const HS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN!
-
 interface HsCompany {
   id: string
   properties: Record<string, string | null>
 }
 
 async function searchIntentCompanies(): Promise<HsCompany[]> {
+  const token = process.env.HUBSPOT_ACCESS_TOKEN
+  if (!token) throw new Error("HUBSPOT_ACCESS_TOKEN environment variable is not set")
+
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   const afterMs = thirtyDaysAgo.getTime()
 
@@ -20,7 +21,7 @@ async function searchIntentCompanies(): Promise<HsCompany[]> {
     filterGroups: [
       {
         filters: [
-          { propertyName: "g2_researched_date", operator: "GTE", value: String(afterMs) },
+          { propertyName: "g2_researched_date", operator: "GTE", value: afterMs },
         ],
       },
     ],
@@ -32,7 +33,7 @@ async function searchIntentCompanies(): Promise<HsCompany[]> {
   const res = await fetch("https://api.hubapi.com/crm/v3/objects/companies/search", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${HS_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
