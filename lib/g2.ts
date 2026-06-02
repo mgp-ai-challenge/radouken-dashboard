@@ -84,7 +84,7 @@ export async function getG2Product(): Promise<G2Product> {
     id: item.id,
     name: String(item.attributes.name ?? ""),
     starRating: Number(item.attributes.star_rating ?? 0),
-    reviewsCount: Number(item.attributes.reviews_count ?? 0),
+    reviewsCount: Number(item.attributes.review_count ?? 0),
   }
   _productCache = { product, fetchedAt: now }
   return product
@@ -94,43 +94,52 @@ export async function getG2Product(): Promise<G2Product> {
 
 export async function getG2Reviews(productId: string): Promise<G2Review[]> {
   const data = await g2Fetch(
-    `/reviews?filter[product_id]=${encodeURIComponent(productId)}&page[size]=10&sort=-created_at`
+    `/products/${encodeURIComponent(productId)}/survey-responses?page[size]=10&sort=-submitted_at`
   ) as { data: Array<{ id: string; attributes: Record<string, unknown> }> }
-  return (data.data ?? []).map((item) => ({
-    id: item.id,
-    title: String(item.attributes.title ?? ""),
-    rating: Number(item.attributes.star_rating ?? 0),
-    reviewerRole: String(item.attributes.reviewer_job_title ?? item.attributes.submitter_title ?? ""),
-    companySize: String(item.attributes.company_size ?? ""),
-    body: String(item.attributes.love ?? item.attributes.body ?? ""),
-    createdAt: String(item.attributes.created_at ?? ""),
-  }))
+  return (data.data ?? []).map((item) => {
+    const attrs = item.attributes
+    const commentAnswers = attrs.comment_answers as Record<string, { value?: string }> | null
+    const body = commentAnswers?.love?.value ?? String(attrs.body ?? "")
+    return {
+      id: item.id,
+      title: String(attrs.title ?? ""),
+      rating: Number(attrs.star_rating ?? 0),
+      reviewerRole: String(attrs.user_name ?? ""),
+      companySize: String(attrs.country_name ?? ""),
+      body,
+      createdAt: String(attrs.submitted_at ?? ""),
+    }
+  })
 }
 
 // ─── Profile views ────────────────────────────────────────────────────────────
 
 export async function getG2ProfileViews(productId: string): Promise<G2ProfileView[]> {
-  const data = await g2Fetch(
-    `/profile_views?filter[product_id]=${encodeURIComponent(productId)}&filter[period]=weekly`
-  ) as { data: Array<{ id: string; attributes: Record<string, unknown> }> }
-  return (data.data ?? []).map((item) => ({
-    week: String(item.attributes.period_start ?? item.attributes.date ?? ""),
-    views: Number(item.attributes.views ?? item.attributes.count ?? 0),
-  }))
+  try {
+    const data = await g2Fetch(
+      `/profile_views?filter[product_id]=${encodeURIComponent(productId)}&filter[period]=weekly`
+    ) as { data: Array<{ id: string; attributes: Record<string, unknown> }> }
+    return (data.data ?? []).map((item) => ({
+      week: String(item.attributes.period_start ?? item.attributes.date ?? ""),
+      views: Number(item.attributes.views ?? item.attributes.count ?? 0),
+    }))
+  } catch {
+    return []
+  }
 }
 
 // ─── Category ranking ─────────────────────────────────────────────────────────
 
 export async function getG2Rank(productId: string): Promise<G2Rank | null> {
   try {
-    const data = await g2Fetch(`/products/${encodeURIComponent(productId)}/ranking`) as {
+    const data = await g2Fetch(`/products/${encodeURIComponent(productId)}/product-rating`) as {
       data: { id: string; attributes: Record<string, unknown> }
     }
     const attrs = data.data?.attributes ?? {}
     return {
-      category: String(attrs.category_name ?? attrs.category ?? ""),
-      rank: Number(attrs.rank ?? 0),
-      rankChange: Number(attrs.rank_change ?? 0),
+      category: String(attrs.category_name ?? ""),
+      rank: 0,
+      rankChange: 0,
     }
   } catch {
     return null
