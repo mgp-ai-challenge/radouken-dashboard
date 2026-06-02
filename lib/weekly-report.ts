@@ -37,15 +37,18 @@ function getWeekLabel(): string {
 }
 
 async function fetchAllData(baseUrl: string) {
-  const [kpis, weeklyDau, monthlySubmissions, pipelineStages, emailSplit] =
+  const [kpis, monthlySubmissions, pipelineStages, emailSplit] =
     await Promise.all([
-      fetch(`${baseUrl}/api/self-serve/kpis`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${baseUrl}/api/self-serve/weekly-dau`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${baseUrl}/api/self-serve/monthly-submissions`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${baseUrl}/api/self-serve/pipeline-stages`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${baseUrl}/api/self-serve/email-split`, { cache: "no-store" }).then((r) => r.json()),
+      fetch(`${baseUrl}/api/self-serve/kpis`, { cache: "no-store" })
+        .then((r) => { if (!r.ok) throw new Error(`kpis ${r.status}`); return r.json() }),
+      fetch(`${baseUrl}/api/self-serve/monthly-submissions`, { cache: "no-store" })
+        .then((r) => { if (!r.ok) throw new Error(`monthly-submissions ${r.status}`); return r.json() }),
+      fetch(`${baseUrl}/api/self-serve/pipeline-stages`, { cache: "no-store" })
+        .then((r) => { if (!r.ok) throw new Error(`pipeline-stages ${r.status}`); return r.json() }),
+      fetch(`${baseUrl}/api/self-serve/email-split`, { cache: "no-store" })
+        .then((r) => { if (!r.ok) throw new Error(`email-split ${r.status}`); return r.json() }),
     ])
-  return { kpis, weeklyDau, monthlySubmissions, pipelineStages, emailSplit }
+  return { kpis, monthlySubmissions, pipelineStages, emailSplit }
 }
 
 type FetchedData = Awaited<ReturnType<typeof fetchAllData>>
@@ -62,7 +65,7 @@ async function generateInsights(data: FetchedData): Promise<string> {
   const approvalRates = data.monthlySubmissions.map((m: { month: string; approvalRate: number }) =>
     `${m.month}: ${m.approvalRate}%`
   ).join(", ")
-  const topStages = (data.pipelineStages as Array<{ name: string; normDau: number; count: number }>)
+  const topStages = (data.pipelineStages as Array<{ name: string; normDau: number; count: number; normDauQ1: number }>)
     .slice(0, 4)
     .map((s) => `${s.name}: ${s.normDau.toLocaleString()} DAU (${s.count} deals)`)
     .join("; ")
@@ -112,26 +115,27 @@ async function postToTelegram(text: string): Promise<void> {
   const chatId = process.env.TELEGRAM_CHAT_ID
   if (!token || !chatId) return
 
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: chatId,
       text,
-      parse_mode: "Markdown",
     }),
   })
+  if (!res.ok) console.warn("[postToTelegram] failed", res.status, await res.text())
 }
 
 async function postToSlack(text: string): Promise<void> {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL
   if (!webhookUrl) return
 
-  await fetch(webhookUrl, {
+  const res = await fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
   })
+  if (!res.ok) console.warn("[postToSlack] failed", res.status, await res.text())
 }
 
 function formatDeliveryMessage(report: WeeklyReport): string {
