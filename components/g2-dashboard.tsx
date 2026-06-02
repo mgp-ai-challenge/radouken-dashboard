@@ -591,7 +591,7 @@ export function G2Dashboard() {
                         style={{ borderBottom: expandedRow === co.id ? "none" : i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
                       >
                         <td style={{ padding: "10px 10px", maxWidth: "220px" }}>
-                          <a href={hsUrl} target="_blank" rel="noreferrer" style={{ color: C.sage, textDecoration: "none", fontWeight: 500 }}
+                          <a href={hsUrl} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} style={{ color: C.sage, textDecoration: "none", fontWeight: 500 }}
                             onMouseEnter={(e) => (e.currentTarget.style.color = C.accentBright)}
                             onMouseLeave={(e) => (e.currentTarget.style.color = C.sage)}>
                             {co.name || "—"}
@@ -627,8 +627,8 @@ export function G2Dashboard() {
                         </td>
                       </tr>
                       {expandedRow === co.id && (
-                        <tr style={{ borderBottom: i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none" }}>
-                          <td colSpan={6} style={{ padding: "0 10px 14px 10px", background: C.cardAlt }}>
+                        <tr style={{ borderBottom: i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none", background: C.cardAlt }}>
+                          <td colSpan={6} style={{ padding: "0 10px 14px 10px" }}>
                             {(() => {
                               const e = appEnrichments.get(co.id)
                               if (!e || !e.hasApp) {
