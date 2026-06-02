@@ -293,7 +293,7 @@ export function G2Dashboard() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              companies: intentData.companies.map((c) => ({ id: c.id, name: c.name })),
+              companies: intentData.companies.map((co) => ({ id: co.id, name: co.name })),
             }),
           })
             .then((r) => r.ok ? r.json() : Promise.reject(r.status))
