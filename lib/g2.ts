@@ -1,4 +1,4 @@
-// lib/g2.ts
+// G2 Data API client — https://data.g2.com/api/v1/
 
 export interface G2Review {
   id: string
@@ -47,44 +47,53 @@ export interface G2IntentCompany {
 }
 
 const G2_BASE = "https://data.g2.com/api/v1"
-const G2_TOKEN = process.env.G2_API_TOKEN!
 
 async function g2Fetch(path: string): Promise<unknown> {
+  const token = process.env.G2_API_TOKEN
+  if (!token) throw new Error("G2_API_TOKEN environment variable is not set")
   const res = await fetch(`${G2_BASE}${path}`, {
-    headers: { Authorization: `Token token=${G2_TOKEN}` },
+    headers: { Authorization: `Token token=${token}` },
     cache: "no-store",
   })
   if (!res.ok) {
-    throw new Error(`G2 API ${path} → ${res.status} ${res.statusText}`)
+    const body = await res.text().catch(() => "")
+    throw new Error(`G2 API ${path} → ${res.status} ${res.statusText}${body ? `: ${body.slice(0, 200)}` : ""}`)
   }
   return res.json()
 }
 
 // ─── Product discovery ────────────────────────────────────────────────────────
 
-let _cachedProduct: G2Product | null = null
+const PRODUCT_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+let _productCache: { product: G2Product; fetchedAt: number } | null = null
 
 export async function getG2Product(): Promise<G2Product> {
-  if (_cachedProduct) return _cachedProduct
+  const now = Date.now()
+  if (_productCache && now - _productCache.fetchedAt < PRODUCT_CACHE_TTL_MS) {
+    return _productCache.product
+  }
   const slug = process.env.G2_PRODUCT_SLUG ?? ""
   const qs = slug ? `?filter[slug]=${encodeURIComponent(slug)}` : ""
   const data = await g2Fetch(`/products${qs}`) as { data: Array<{ id: string; attributes: Record<string, unknown> }> }
+  if (!Array.isArray(data.data) || data.data.length === 0) {
+    throw new Error("G2: no product found")
+  }
   const item = data.data[0]
-  if (!item) throw new Error("G2: no product found")
-  _cachedProduct = {
+  const product: G2Product = {
     id: item.id,
     name: String(item.attributes.name ?? ""),
     starRating: Number(item.attributes.star_rating ?? 0),
     reviewsCount: Number(item.attributes.reviews_count ?? 0),
   }
-  return _cachedProduct
+  _productCache = { product, fetchedAt: now }
+  return product
 }
 
 // ─── Reviews ──────────────────────────────────────────────────────────────────
 
 export async function getG2Reviews(productId: string): Promise<G2Review[]> {
   const data = await g2Fetch(
-    `/reviews?filter[product_id]=${productId}&page[size]=10&sort=-created_at`
+    `/reviews?filter[product_id]=${encodeURIComponent(productId)}&page[size]=10&sort=-created_at`
   ) as { data: Array<{ id: string; attributes: Record<string, unknown> }> }
   return (data.data ?? []).map((item) => ({
     id: item.id,
@@ -101,7 +110,7 @@ export async function getG2Reviews(productId: string): Promise<G2Review[]> {
 
 export async function getG2ProfileViews(productId: string): Promise<G2ProfileView[]> {
   const data = await g2Fetch(
-    `/profile_views?filter[product_id]=${productId}&filter[period]=weekly`
+    `/profile_views?filter[product_id]=${encodeURIComponent(productId)}&filter[period]=weekly`
   ) as { data: Array<{ id: string; attributes: Record<string, unknown> }> }
   return (data.data ?? []).map((item) => ({
     week: String(item.attributes.period_start ?? item.attributes.date ?? ""),
@@ -113,7 +122,7 @@ export async function getG2ProfileViews(productId: string): Promise<G2ProfileVie
 
 export async function getG2Rank(productId: string): Promise<G2Rank | null> {
   try {
-    const data = await g2Fetch(`/products/${productId}/ranking`) as {
+    const data = await g2Fetch(`/products/${encodeURIComponent(productId)}/ranking`) as {
       data: { id: string; attributes: Record<string, unknown> }
     }
     const attrs = data.data?.attributes ?? {}
@@ -131,7 +140,7 @@ export async function getG2Rank(productId: string): Promise<G2Rank | null> {
 
 export async function getG2Campaigns(productId: string): Promise<G2Campaign[]> {
   try {
-    const data = await g2Fetch(`/campaigns?filter[product_id]=${productId}`) as {
+    const data = await g2Fetch(`/campaigns?filter[product_id]=${encodeURIComponent(productId)}`) as {
       data: Array<{ id: string; attributes: Record<string, unknown> }>
     }
     return (data.data ?? []).map((item) => {
