@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, LayoutList, Bug, Settings, Bot, TrendingUp, RotateCcw } from "lucide-react"
+import { LayoutDashboard, LayoutList, Bug, Settings, Bot, TrendingUp, RotateCcw, Star } from "lucide-react"
 import { cn, shellNavLink } from "@/lib/utils"
 import { useState } from "react"
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/self-serve", label: "Self-Serve", icon: TrendingUp },
+  { href: "/g2", label: "G2", icon: Star },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/workspace", label: "Project Workspace", icon: LayoutList },
   { href: "/analytics", label: "Bug Tracking", icon: Bug },
