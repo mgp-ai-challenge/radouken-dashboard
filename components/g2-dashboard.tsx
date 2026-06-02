@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import React, { useEffect, useState } from "react"
 import {
   Star,
   TrendingUp,
@@ -21,6 +21,7 @@ import {
   LabelList,
 } from "recharts"
 import type { G2Review, G2Product, G2ProfileView, G2Rank, G2Campaign, G2IntentCompany } from "@/lib/g2"
+import type { AppEnrichment } from "@/lib/sensortower"
 
 // ─── Design system (duplicated from self-serve-dashboard.tsx) ─────────────────
 const C = {
@@ -216,6 +217,40 @@ function relTime(iso: string): string {
   return `${months}mo ago`
 }
 
+// ─── App badge helper ─────────────────────────────────────────────────────────
+function AppBadge({ enrichment, loading }: { enrichment: AppEnrichment | undefined; loading: boolean }) {
+  if (loading && !enrichment) {
+    return (
+      <span style={{
+        display: "inline-block", width: 52, height: 16, borderRadius: 4,
+        background: C.card,
+        backgroundImage: `linear-gradient(90deg, ${C.card} 0%, ${C.cardAlt} 50%, ${C.card} 100%)`,
+        backgroundSize: "200% 100%",
+        animation: "bm-shimmer 1.6s ease infinite",
+      }} />
+    )
+  }
+  if (!enrichment) return null
+  if (!enrichment.hasApp) {
+    return (
+      <span style={{ padding: "2px 7px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: "rgba(124,140,148,0.10)", color: C.slate }}>
+        No app
+      </span>
+    )
+  }
+  const label = enrichment.platform === "both" ? "iOS + Android"
+    : enrichment.platform === "ios" ? "iOS" : "Android"
+  const bg    = enrichment.platform === "both" ? C.accentDim
+    : enrichment.platform === "ios" ? "rgba(76,158,245,0.12)" : "rgba(76,245,130,0.12)"
+  const color = enrichment.platform === "both" ? C.accent
+    : enrichment.platform === "ios" ? C.blue : "#4cf582"
+  return (
+    <span style={{ padding: "2px 7px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: bg, color }}>
+      {label}
+    </span>
+  )
+}
+
 // ─── Week label helper ────────────────────────────────────────────────────────
 function fmtWeek(iso: string): string {
   if (!iso) return ""
@@ -235,6 +270,10 @@ export function G2Dashboard() {
   const [campaignsErr, setCampaignsErr] = useState(false)
   const [intentErr,    setIntentErr]    = useState(false)
 
+  const [appEnrichments, setAppEnrichments] = useState<Map<string, AppEnrichment>>(new Map())
+  const [appEnrichmentsLoading, setAppEnrichmentsLoading] = useState(false)
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+
   useEffect(() => {
     Promise.allSettled([
       fetch("/api/g2/reviews").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
@@ -245,7 +284,30 @@ export function G2Dashboard() {
       if (r.status === "fulfilled") setReviews(r.value as ReviewsData); else setReviewsErr(true)
       if (p.status === "fulfilled") setProfile(p.value as ProfileData); else setProfileErr(true)
       if (c.status === "fulfilled") setCampaigns(c.value as CampaignsData); else setCampaignsErr(true)
-      if (i.status === "fulfilled") setIntent(i.value as IntentData); else setIntentErr(true)
+      if (i.status === "fulfilled") {
+        const intentData = i.value as IntentData
+        setIntent(intentData)
+        if (intentData.companies.length > 0) {
+          setAppEnrichmentsLoading(true)
+          fetch("/api/g2/app-enrichment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              companies: intentData.companies.map((c) => ({ id: c.id, name: c.name })),
+            }),
+          })
+            .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+            .then((data: { enrichments: AppEnrichment[] }) => {
+              const map = new Map<string, AppEnrichment>()
+              for (const e of data.enrichments) map.set(e.companyId, e)
+              setAppEnrichments(map)
+            })
+            .catch(() => { /* silent — badges stay absent */ })
+            .finally(() => setAppEnrichmentsLoading(false))
+        }
+      } else {
+        setIntentErr(true)
+      }
     })
   }, [])
 
@@ -508,7 +570,7 @@ export function G2Dashboard() {
             <table aria-label="G2 Buyer Intent Companies" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr>
-                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal"].map((col) => (
+                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal", "App"].map((col) => (
                     <th key={col} scope="col" style={{ textAlign: col === "Company" ? "left" : "center", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
                       {col}
                     </th>
@@ -555,6 +617,9 @@ export function G2Dashboard() {
                       </td>
                       <td style={{ padding: "10px 10px", textAlign: "center", color: C.muted, fontSize: "11px" }}>
                         {relTime(co.lastSignalAt)}
+                      </td>
+                      <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                        <AppBadge enrichment={appEnrichments.get(co.id)} loading={appEnrichmentsLoading} />
                       </td>
                     </tr>
                   )
