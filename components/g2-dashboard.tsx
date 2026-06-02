@@ -585,43 +585,89 @@ export function G2Dashboard() {
                   const stageBg      = co.buyingStage === "decision" ? C.accentDim : co.buyingStage === "consideration" ? "rgba(76,158,245,0.12)" : "rgba(124,140,148,0.10)"
                   const hsUrl        = `https://app.hubspot.com/contacts/${intent.hubspotPortalId}/company/${co.id}`
                   return (
-                    <tr key={co.id} style={{ borderBottom: i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none" }}>
-                      <td style={{ padding: "10px 10px", maxWidth: "220px" }}>
-                        <a href={hsUrl} target="_blank" rel="noreferrer" style={{ color: C.sage, textDecoration: "none", fontWeight: 500 }}
-                          onMouseEnter={(e) => (e.currentTarget.style.color = C.accentBright)}
-                          onMouseLeave={(e) => (e.currentTarget.style.color = C.sage)}>
-                          {co.name || "—"}
-                        </a>
-                        {co.intentDetails && (
-                          <p style={{ fontSize: "10px", color: C.muted, marginTop: "3px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } as React.CSSProperties}>
-                            {co.intentDetails}
-                          </p>
-                        )}
-                      </td>
-                      <td style={{ padding: "10px 10px", textAlign: "center" }}>
-                        {co.activityLevel ? (
-                          <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: activityBg, color: activityColor, textTransform: "capitalize" }}>
-                            {co.activityLevel}
-                          </span>
-                        ) : <span style={{ color: C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding: "10px 10px", textAlign: "center" }}>
-                        {co.buyingStage ? (
-                          <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: stageBg, color: stageColor, textTransform: "capitalize" }}>
-                            {co.buyingStage}
-                          </span>
-                        ) : <span style={{ color: C.muted }}>—</span>}
-                      </td>
-                      <td style={{ padding: "10px 10px", textAlign: "center", fontFamily: MONO, color: co.intentScore !== null ? C.sageLight : C.muted }}>
-                        {co.intentScore !== null ? co.intentScore : "—"}
-                      </td>
-                      <td style={{ padding: "10px 10px", textAlign: "center", color: C.muted, fontSize: "11px" }}>
-                        {relTime(co.lastSignalAt)}
-                      </td>
-                      <td style={{ padding: "10px 10px", textAlign: "center" }}>
-                        <AppBadge enrichment={appEnrichments.get(co.id)} loading={appEnrichmentsLoading} />
-                      </td>
-                    </tr>
+                    <React.Fragment key={co.id}>
+                      <tr
+                        onClick={() => setExpandedRow(expandedRow === co.id ? null : co.id)}
+                        style={{ borderBottom: expandedRow === co.id ? "none" : i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
+                      >
+                        <td style={{ padding: "10px 10px", maxWidth: "220px" }}>
+                          <a href={hsUrl} target="_blank" rel="noreferrer" style={{ color: C.sage, textDecoration: "none", fontWeight: 500 }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = C.accentBright)}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = C.sage)}>
+                            {co.name || "—"}
+                          </a>
+                          {co.intentDetails && (
+                            <p style={{ fontSize: "10px", color: C.muted, marginTop: "3px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } as React.CSSProperties}>
+                              {co.intentDetails}
+                            </p>
+                          )}
+                        </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                          {co.activityLevel ? (
+                            <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: activityBg, color: activityColor, textTransform: "capitalize" }}>
+                              {co.activityLevel}
+                            </span>
+                          ) : <span style={{ color: C.muted }}>—</span>}
+                        </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                          {co.buyingStage ? (
+                            <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: stageBg, color: stageColor, textTransform: "capitalize" }}>
+                              {co.buyingStage}
+                            </span>
+                          ) : <span style={{ color: C.muted }}>—</span>}
+                        </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center", fontFamily: MONO, color: co.intentScore !== null ? C.sageLight : C.muted }}>
+                          {co.intentScore !== null ? co.intentScore : "—"}
+                        </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center", color: C.muted, fontSize: "11px" }}>
+                          {relTime(co.lastSignalAt)}
+                        </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                          <AppBadge enrichment={appEnrichments.get(co.id)} loading={appEnrichmentsLoading} />
+                        </td>
+                      </tr>
+                      {expandedRow === co.id && (
+                        <tr style={{ borderBottom: i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none" }}>
+                          <td colSpan={6} style={{ padding: "0 10px 14px 10px", background: C.cardAlt }}>
+                            {(() => {
+                              const e = appEnrichments.get(co.id)
+                              if (!e || !e.hasApp) {
+                                return (
+                                  <p style={{ fontSize: "12px", color: C.muted, padding: "10px 0" }}>
+                                    No mobile app found for this publisher.
+                                  </p>
+                                )
+                              }
+                              return (
+                                <div style={{ display: "flex", gap: "24px", alignItems: "center", padding: "10px 0", flexWrap: "wrap" }}>
+                                  <div>
+                                    <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>App</p>
+                                    <p style={{ fontSize: "13px", fontWeight: 600, color: C.sageLight }}>{e.appName}</p>
+                                  </div>
+                                  {e.monthlyDownloads && (
+                                    <div>
+                                      <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>Downloads / mo</p>
+                                      <p style={{ fontSize: "13px", fontFamily: MONO, color: C.sageLight }}>{e.monthlyDownloads}</p>
+                                    </div>
+                                  )}
+                                  {e.storeUrl && (
+                                    <a
+                                      href={e.storeUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      onClick={(ev) => ev.stopPropagation()}
+                                      style={{ fontSize: "12px", color: C.accent, textDecoration: "none", border: `1px solid ${C.borderAccent}`, padding: "4px 12px", borderRadius: "6px" }}
+                                    >
+                                      View in Store ↗
+                                    </a>
+                                  )}
+                                </div>
+                              )
+                            })()}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   )
                 })}
               </tbody>
