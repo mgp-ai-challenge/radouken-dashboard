@@ -12,13 +12,13 @@ export interface AppEnrichment {
 }
 
 interface STPublisher {
-  publisher_id: number
+  publisher_id: string | number
   publisher_name: string
   os: string
 }
 
 interface STApp {
-  app_id: number
+  app_id: string | number
   name: string
   humanized_worldwide_last_30_days_downloads: string
 }
@@ -44,14 +44,14 @@ async function searchPublisher(name: string, store: "ios" | "android"): Promise<
   return Array.isArray(data) && data.length > 0 ? data[0] : null
 }
 
-async function getTopApp(publisherId: number, store: "ios" | "android"): Promise<STApp | null> {
+async function getTopApp(publisherId: string | number, store: "ios" | "android"): Promise<STApp | null> {
   const data = await stFetch(
     `/v1/${store}/publishers/${publisherId}/apps?limit=1&sort_by=downloads`
   ) as { data: STApp[] }
   return data.data?.[0] ?? null
 }
 
-function buildStoreUrl(appId: number, store: "ios" | "android"): string {
+function buildStoreUrl(appId: string | number, store: "ios" | "android"): string {
   return store === "ios"
     ? `https://apps.apple.com/app/id${appId}`
     : `https://play.google.com/store/apps/details?id=${appId}`
@@ -113,7 +113,8 @@ export async function enrichCompany(companyId: string, name: string): Promise<Ap
       monthlyDownloads: android!.humanized_worldwide_last_30_days_downloads || null,
       storeUrl: buildStoreUrl(android!.app_id, "android"),
     }
-  } catch {
+  } catch (err) {
+    console.error(`[sensortower] enrichCompany failed for "${name}":`, err)
     return empty
   }
 }
