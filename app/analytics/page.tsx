@@ -129,6 +129,7 @@ type SeverityFilter = IssueSeverity | "all"
 export default function BugTrackingPage() {
   const [store,    setStore]    = useState<BugIssuesStore | null>(null)
   const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>("open")
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all")
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all")
@@ -141,17 +142,24 @@ export default function BugTrackingPage() {
   useEffect(() => { fetchIssues() }, [fetchIssues])
 
   async function runScan() {
+    setScanError(null)
     setScanning(true)
     try {
       await fetch("/api/agents/code-review/run", { method: "POST" })
+      let agentFailed = false
       for (let i = 0; i < 120; i++) {
         await new Promise((r) => setTimeout(r, 3000))
         const res = await fetch("/api/agents")
         const agents = await res.json() as { id: string; status: string }[]
         const agent  = agents.find((a) => a.id === "code-review")
+        if (agent?.status === "error") { agentFailed = true; break }
         if (agent?.status !== "running") break
       }
-      await fetchIssues()
+      if (agentFailed) {
+        setScanError("Scan failed — check the Agents page for details")
+      } else {
+        await fetchIssues()
+      }
     } finally {
       setScanning(false)
     }
@@ -250,6 +258,13 @@ export default function BugTrackingPage() {
           ))}
         </div>
       </div>
+
+      {/* Scan error */}
+      {scanError && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+          {scanError}
+        </div>
+      )}
 
       {/* Issue list */}
       {store === null ? (

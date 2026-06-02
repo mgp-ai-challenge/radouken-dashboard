@@ -78,6 +78,9 @@ export async function scanCodebase(): Promise<{ filesScanned: number; issuesFoun
   }
 
   // Build concatenated source with file headers
+  // NOTE: Entire codebase is sent in a single prompt (~43K tokens currently, well within
+  // Haiku's 200K context window). If the project grows beyond ~500 source files, switch
+  // to batched scanning. Truncation is caught below via stop_reason === "max_tokens".
   const codebase = filePaths
     .map((f) => `// FILE: ${path.relative(root, f)}\n${fs.readFileSync(f, "utf-8")}`)
     .join("\n\n")

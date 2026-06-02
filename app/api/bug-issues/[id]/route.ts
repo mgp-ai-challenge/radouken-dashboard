@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { readBugIssues, writeBugIssues, IssueStatus, BugIssue } from "@/lib/bug-scanner"
 
+export const dynamic = "force-dynamic"
+
 const VALID_STATUSES: IssueStatus[] = ["open", "in_progress", "fixed", "ignored"]
 
 export async function PATCH(
