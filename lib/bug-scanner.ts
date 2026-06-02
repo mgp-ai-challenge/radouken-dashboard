@@ -60,7 +60,11 @@ export function readBugIssues(): BugIssuesStore {
 }
 
 export function writeBugIssues(store: BugIssuesStore): void {
-  fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2))
+  try {
+    fs.writeFileSync(STORE_FILE, JSON.stringify(store, null, 2))
+  } catch (err) {
+    throw new Error(`[bug-scanner] failed to write store: ${(err as Error).message}`)
+  }
 }
 
 export async function scanCodebase(): Promise<{ filesScanned: number; issuesFound: number }> {
@@ -119,11 +123,18 @@ ${codebase}
 
   // Parse response
   const raw = message.content[0].type === "text" ? message.content[0].text.trim() : ""
+
+  // Check for truncation
+  if (message.stop_reason === "max_tokens") {
+    throw new Error("[bug-scanner] Claude response was truncated (max_tokens reached) — codebase may be too large")
+  }
+
   let newRaw: Omit<BugIssue, "id" | "status" | "notes" | "detectedAt" | "updatedAt">[] = []
   try {
     const parsed = JSON.parse(raw) as { issues: typeof newRaw }
     newRaw = parsed.issues ?? []
   } catch {
+    console.error("[bug-scanner] failed to parse Claude response:", raw.slice(0, 500))
     newRaw = []
   }
 
@@ -136,7 +147,7 @@ ${codebase}
   // Build fresh open issues
   const fresh: BugIssue[] = newRaw.map((issue, idx) => ({
     ...issue,
-    id: `bug_${Date.now()}_${idx}`,
+    id: `bug_${Date.now()}_${Math.random().toString(36).slice(2)}_${idx}`,
     status: "open" as IssueStatus,
     notes: "",
     detectedAt: now,

@@ -31,6 +31,9 @@ pnpm-debug.log*
 # env files
 .env*.local
 
+# generated files
+.bug-issues.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
