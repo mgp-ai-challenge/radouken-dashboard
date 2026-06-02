@@ -43,6 +43,10 @@ function IssueCard({
   const [expanded, setExpanded] = useState(false)
   const [notes, setNotes] = useState(issue.notes)
 
+  useEffect(() => {
+    setNotes(issue.notes)
+  }, [issue.notes])
+
   async function patchIssue(body: { status?: IssueStatus; notes?: string }) {
     const res = await fetch(`/api/bug-issues/${issue.id}`, {
       method: "PATCH",
