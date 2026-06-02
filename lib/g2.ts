@@ -72,8 +72,9 @@ export async function getG2Product(): Promise<G2Product> {
   if (_productCache && now - _productCache.fetchedAt < PRODUCT_CACHE_TTL_MS) {
     return _productCache.product
   }
-  const slug = process.env.G2_PRODUCT_SLUG ?? ""
-  const qs = slug ? `?filter[slug]=${encodeURIComponent(slug)}` : ""
+  const slug = process.env.G2_PRODUCT_SLUG
+  if (!slug) throw new Error("G2_PRODUCT_SLUG environment variable is not set")
+  const qs = `?filter[slug]=${encodeURIComponent(slug)}`
   const data = await g2Fetch(`/products${qs}`) as { data: Array<{ id: string; attributes: Record<string, unknown> }> }
   if (!Array.isArray(data.data) || data.data.length === 0) {
     throw new Error("G2: no product found")
