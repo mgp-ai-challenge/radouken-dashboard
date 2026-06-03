@@ -452,15 +452,11 @@ export function G2Dashboard() {
           )}
         />
         <KpiCard
-          label="Intent Signals"
-          value={intent ? String(intent.totalThisMonth) : "—"}
+          label={`Intent Signals · Last ${intentDays}d`}
+          value={intent ? String(intent.companies.length) : "—"}
           Icon={Zap}
           accent={C.amber}
-          sub={intent && (
-            <span style={{ fontSize: "11px", color: C.muted }}>
-              {intent.totalThisWeek} this week
-            </span>
-          )}
+          sub={<span style={{ fontSize: "11px", color: C.muted }}>rolling {intentDays} days</span>}
         />
       </div>
 
