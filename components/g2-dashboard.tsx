@@ -433,185 +433,8 @@ export function G2Dashboard() {
         />
       </div>
 
-      {/* ── Panel 1: Recent Reviews ─────────────────────────────────────────── */}
+      {/* ── Panel 1: Buyer Intent ──────────────────────────────────────────── */}
       <Panel style={{ marginBottom: "24px" }}>
-        <SectionLabel>Recent Reviews</SectionLabel>
-        {reviewsErr ? (
-          <DataError label="reviews" />
-        ) : !reviews ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {[200, 160, 180].map((h, i) => <LoadingSkeleton key={i} h={h} />)}
-          </div>
-        ) : reviews.reviews.length === 0 ? (
-          <p style={{ fontSize: "13px", color: C.muted, textAlign: "center", padding: "32px 0" }}>No reviews found.</p>
-        ) : (
-          <div>
-            {reviews.reviews.map((review, i) => (
-              <div key={review.id} style={{
-                padding:     "14px 0",
-                borderBottom: i < reviews.reviews.length - 1 ? `1px solid ${C.border}` : "none",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
-                  <StarRating rating={review.rating} />
-                  <span style={{ fontSize: "13px", fontWeight: 600, color: C.sageLight, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {review.title || "Untitled Review"}
-                  </span>
-                </div>
-                <p style={{ fontSize: "11px", color: C.muted, marginBottom: "6px" }}>
-                  {[review.reviewerRole, review.companySize, review.createdAt ? new Date(review.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : ""].filter(Boolean).join(" · ")}
-                </p>
-                {review.body && (
-                  <p style={{
-                    fontSize:   "12px",
-                    color:      C.slate,
-                    overflow:   "hidden",
-                    display:    "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical",
-                    lineHeight: "1.5",
-                  } as React.CSSProperties}>
-                    {review.body}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </Panel>
-
-      {/* ── Panel 2: Profile Analytics ──────────────────────────────────────── */}
-      <Panel style={{ marginBottom: "24px" }}>
-        <SectionLabel>Profile Analytics</SectionLabel>
-        {profileErr ? (
-          <DataError label="profile analytics" />
-        ) : !profile ? (
-          <LoadingSkeleton h={220} />
-        ) : (
-          <div style={{ display: "flex", gap: "24px", alignItems: "stretch" }}>
-            {/* Category Rank card */}
-            <div style={{
-              width: "35%", flexShrink: 0,
-              background: C.cardAlt, border: `1px solid ${C.border}`,
-              borderRadius: "12px", padding: "20px",
-              display: "flex", flexDirection: "column", justifyContent: "center",
-            }}>
-              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginBottom: "12px" }}>
-                Category Rank
-              </p>
-              <p style={{ fontSize: "52px", fontWeight: 700, lineHeight: 1, color: C.accent, fontFamily: MONO, letterSpacing: "-0.03em", marginBottom: "8px" }}>
-                {profile.rank.rank > 0 ? `#${profile.rank.rank}` : "—"}
-              </p>
-              <p style={{ fontSize: "12px", color: C.sage, marginBottom: "12px" }}>
-                {profile.rank.category || "—"}
-              </p>
-              {profile.rank.rankChange !== 0 ? (
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: "4px",
-                  background: profile.rank.rankChange > 0 ? C.accentDim : C.redDim,
-                  color: profile.rank.rankChange > 0 ? C.accent : C.red,
-                  padding: "3px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 600,
-                  alignSelf: "flex-start",
-                }}>
-                  {profile.rank.rankChange > 0 ? "↑" : "↓"}
-                  {Math.abs(profile.rank.rankChange)} this month
-                </span>
-              ) : (
-                <span style={{ fontSize: "11px", color: C.muted }}>— no change</span>
-              )}
-            </div>
-
-            {/* Weekly views chart */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, marginBottom: "18px" }}>
-                Weekly Profile Views
-              </p>
-              {profile.weeklyViews.length === 0 ? (
-                <p style={{ fontSize: "12px", color: C.muted }}>No view data available.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={180}>
-                  <ComposedChart data={profile.weeklyViews.map((v) => ({ ...v, label: fmtWeek(v.week) }))} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
-                    <CartesianGrid stroke={C.grid} vertical={false} />
-                    <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} width={36} tickFormatter={fmtNum} />
-                    <Tooltip
-                      contentStyle={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "11px" }}
-                      labelStyle={{ color: C.sage }}
-                      itemStyle={{ color: C.accent }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="views"
-                      stroke={C.accent}
-                      strokeWidth={2}
-                      dot={{ fill: C.accent, r: 3, strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: C.accentBright }}
-                    >
-                      <LabelList dataKey="views" position="top" style={{ fill: C.slate, fontSize: "10px" }} formatter={(v: unknown) => fmtNum(v as number)} />
-                    </Line>
-                  </ComposedChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-          </div>
-        )}
-      </Panel>
-
-      {/* ── Panel 3: Paid Campaigns ─────────────────────────────────────────── */}
-      <Panel style={{ marginBottom: "24px" }}>
-        <SectionLabel>Paid Campaigns</SectionLabel>
-        {campaignsErr ? (
-          <DataError label="campaigns" />
-        ) : !campaigns ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {[40, 40, 40].map((h, i) => <LoadingSkeleton key={i} h={h} />)}
-          </div>
-        ) : campaigns.campaigns.length === 0 ? (
-          <p style={{ fontSize: "13px", color: C.muted, textAlign: "center", padding: "32px 0" }}>
-            No campaign data available.
-          </p>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table aria-label="Paid Campaigns" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-              <thead>
-                <tr>
-                  {["Campaign", "Status", "Impressions", "Clicks", "CTR", "Spend"].map((col) => (
-                    <th key={col} scope="col" style={{ textAlign: col === "Campaign" ? "left" : "right", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.campaigns.map((c, i) => (
-                  <tr key={c.id} style={{ borderBottom: i < campaigns.campaigns.length - 1 ? `1px solid ${C.border}` : "none" }}>
-                    <td style={{ padding: "10px 10px", color: C.sage, maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {c.name}
-                    </td>
-                    <td style={{ padding: "10px 10px", textAlign: "right" }}>
-                      <span style={{
-                        padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600,
-                        background: c.status === "active" ? C.accentDim : c.status === "paused" ? C.amberDim : "rgba(124,140,148,0.12)",
-                        color: c.status === "active" ? C.accent : c.status === "paused" ? C.amber : C.slate,
-                      }}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{fmtNum(c.impressions)}</td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{fmtNum(c.clicks)}</td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{c.ctr.toFixed(2)}%</td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sageLight, fontWeight: 600 }}>
-                      ${fmtNum(c.spend)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Panel>
-
-      {/* ── Panel 4: Buyer Intent ───────────────────────────────────────────── */}
-      <Panel>
         <SectionLabel>G2 Buyer Intent — Last 30 Days</SectionLabel>
         {intent && (
           <p style={{ fontSize: "12px", color: C.muted, marginTop: "-10px", marginBottom: "18px" }}>
@@ -733,6 +556,183 @@ export function G2Dashboard() {
                     </React.Fragment>
                   )
                 })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      {/* ── Panel 2: Recent Reviews ─────────────────────────────────────────── */}
+      <Panel style={{ marginBottom: "24px" }}>
+        <SectionLabel>Recent Reviews</SectionLabel>
+        {reviewsErr ? (
+          <DataError label="reviews" />
+        ) : !reviews ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {[200, 160, 180].map((h, i) => <LoadingSkeleton key={i} h={h} />)}
+          </div>
+        ) : reviews.reviews.length === 0 ? (
+          <p style={{ fontSize: "13px", color: C.muted, textAlign: "center", padding: "32px 0" }}>No reviews found.</p>
+        ) : (
+          <div>
+            {reviews.reviews.map((review, i) => (
+              <div key={review.id} style={{
+                padding:     "14px 0",
+                borderBottom: i < reviews.reviews.length - 1 ? `1px solid ${C.border}` : "none",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+                  <StarRating rating={review.rating} />
+                  <span style={{ fontSize: "13px", fontWeight: 600, color: C.sageLight, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {review.title || "Untitled Review"}
+                  </span>
+                </div>
+                <p style={{ fontSize: "11px", color: C.muted, marginBottom: "6px" }}>
+                  {[review.reviewerRole, review.companySize, review.createdAt ? new Date(review.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : ""].filter(Boolean).join(" · ")}
+                </p>
+                {review.body && (
+                  <p style={{
+                    fontSize:   "12px",
+                    color:      C.slate,
+                    overflow:   "hidden",
+                    display:    "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    lineHeight: "1.5",
+                  } as React.CSSProperties}>
+                    {review.body}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
+      {/* ── Panel 3: Profile Analytics ──────────────────────────────────────── */}
+      <Panel style={{ marginBottom: "24px" }}>
+        <SectionLabel>Profile Analytics</SectionLabel>
+        {profileErr ? (
+          <DataError label="profile analytics" />
+        ) : !profile ? (
+          <LoadingSkeleton h={220} />
+        ) : (
+          <div style={{ display: "flex", gap: "24px", alignItems: "stretch" }}>
+            {/* Category Rank card */}
+            <div style={{
+              width: "35%", flexShrink: 0,
+              background: C.cardAlt, border: `1px solid ${C.border}`,
+              borderRadius: "12px", padding: "20px",
+              display: "flex", flexDirection: "column", justifyContent: "center",
+            }}>
+              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginBottom: "12px" }}>
+                Category Rank
+              </p>
+              <p style={{ fontSize: "52px", fontWeight: 700, lineHeight: 1, color: C.accent, fontFamily: MONO, letterSpacing: "-0.03em", marginBottom: "8px" }}>
+                {profile.rank.rank > 0 ? `#${profile.rank.rank}` : "—"}
+              </p>
+              <p style={{ fontSize: "12px", color: C.sage, marginBottom: "12px" }}>
+                {profile.rank.category || "—"}
+              </p>
+              {profile.rank.rankChange !== 0 ? (
+                <span style={{
+                  display: "inline-flex", alignItems: "center", gap: "4px",
+                  background: profile.rank.rankChange > 0 ? C.accentDim : C.redDim,
+                  color: profile.rank.rankChange > 0 ? C.accent : C.red,
+                  padding: "3px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 600,
+                  alignSelf: "flex-start",
+                }}>
+                  {profile.rank.rankChange > 0 ? "↑" : "↓"}
+                  {Math.abs(profile.rank.rankChange)} this month
+                </span>
+              ) : (
+                <span style={{ fontSize: "11px", color: C.muted }}>— no change</span>
+              )}
+            </div>
+
+            {/* Weekly views chart */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, marginBottom: "18px" }}>
+                Weekly Profile Views
+              </p>
+              {profile.weeklyViews.length === 0 ? (
+                <p style={{ fontSize: "12px", color: C.muted }}>No view data available.</p>
+              ) : (
+                <ResponsiveContainer width="100%" height={180}>
+                  <ComposedChart data={profile.weeklyViews.map((v) => ({ ...v, label: fmtWeek(v.week) }))} margin={{ top: 20, right: 16, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={C.grid} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} width={36} tickFormatter={fmtNum} />
+                    <Tooltip
+                      contentStyle={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: "8px", fontSize: "11px" }}
+                      labelStyle={{ color: C.sage }}
+                      itemStyle={{ color: C.accent }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="views"
+                      stroke={C.accent}
+                      strokeWidth={2}
+                      dot={{ fill: C.accent, r: 3, strokeWidth: 0 }}
+                      activeDot={{ r: 5, fill: C.accentBright }}
+                    >
+                      <LabelList dataKey="views" position="top" style={{ fill: C.slate, fontSize: "10px" }} formatter={(v: unknown) => fmtNum(v as number)} />
+                    </Line>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+        )}
+      </Panel>
+
+      {/* ── Panel 4: Paid Campaigns ─────────────────────────────────────────── */}
+      <Panel>
+        <SectionLabel>Paid Campaigns</SectionLabel>
+        {campaignsErr ? (
+          <DataError label="campaigns" />
+        ) : !campaigns ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {[40, 40, 40].map((h, i) => <LoadingSkeleton key={i} h={h} />)}
+          </div>
+        ) : campaigns.campaigns.length === 0 ? (
+          <p style={{ fontSize: "13px", color: C.muted, textAlign: "center", padding: "32px 0" }}>
+            No campaign data available.
+          </p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table aria-label="Paid Campaigns" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+              <thead>
+                <tr>
+                  {["Campaign", "Status", "Impressions", "Clicks", "CTR", "Spend"].map((col) => (
+                    <th key={col} scope="col" style={{ textAlign: col === "Campaign" ? "left" : "right", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {campaigns.campaigns.map((c, i) => (
+                  <tr key={c.id} style={{ borderBottom: i < campaigns.campaigns.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                    <td style={{ padding: "10px 10px", color: C.sage, maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {c.name}
+                    </td>
+                    <td style={{ padding: "10px 10px", textAlign: "right" }}>
+                      <span style={{
+                        padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600,
+                        background: c.status === "active" ? C.accentDim : c.status === "paused" ? C.amberDim : "rgba(124,140,148,0.12)",
+                        color: c.status === "active" ? C.accent : c.status === "paused" ? C.amber : C.slate,
+                      }}>
+                        {c.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{fmtNum(c.impressions)}</td>
+                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{fmtNum(c.clicks)}</td>
+                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{c.ctr.toFixed(2)}%</td>
+                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sageLight, fontWeight: 600 }}>
+                      ${fmtNum(c.spend)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
