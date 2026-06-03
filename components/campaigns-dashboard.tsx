@@ -353,9 +353,13 @@ export function CampaignsDashboard() {
     setAttrib(null)
     setAttribErr(null)
 
+    // Stats are fast — stop syncing indicator once they load
     loadStats()
       .then((camps) => {
-        return loadAttribution(camps).catch((err) => {
+        setSyncing(false)
+        setLastSynced(new Date())
+        // Attribution is slow (paginated leads + HubSpot) — runs independently
+        loadAttribution(camps).catch((err) => {
           if ((err as Error).name === "AbortError") return
           console.error("[campaigns/attribution]", err)
           setAttribErr(String(err))
@@ -364,8 +368,9 @@ export function CampaignsDashboard() {
       .catch((err) => {
         console.error("[campaigns/stats]", err)
         setStatsErr(String(err))
+        setSyncing(false)
+        setLastSynced(new Date())
       })
-      .finally(() => { setSyncing(false); setLastSynced(new Date()) })
   }, [loadStats, loadAttribution])
 
   // Initial load

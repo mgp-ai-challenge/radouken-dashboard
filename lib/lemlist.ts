@@ -64,10 +64,12 @@ export async function fetchAllCampaigns(): Promise<Array<{ _id: string; name: st
   return (data as Array<{ _id: string; name: string }>) ?? []
 }
 
-export async function fetchCampaignStats(campaignId: string): Promise<CampaignStats> {
+export async function fetchCampaignStats(campaignId: string): Promise<CampaignStats & { _raw?: unknown }> {
   const endDate = new Date().toISOString().slice(0, 10)
   const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const data = await llFetch(`/campaigns/${campaignId}/stats?startDate=${startDate}&endDate=${endDate}`) as Record<string, unknown>
+  // Use batch endpoint — individual /stats endpoint has unpredictable shape with date params
+  const res = await llFetch(`/campaigns/stats?campaignIds=${campaignId}&startDate=${startDate}&endDate=${endDate}`) as { results?: Record<string, unknown>[]; errors?: unknown[] }
+  const data: Record<string, unknown> = res.results?.[0] ?? {}
   const sent    = Number(data.messagesSent ?? 0)
   const reached = Number(data.nbLeadsReached ?? 0)
   const opened  = Number(data.opened ?? 0)
@@ -85,6 +87,7 @@ export async function fetchCampaignStats(campaignId: string): Promise<CampaignSt
     bounceRate:      sent > 0 ? bounced / sent : 0,
     nbUnsubscribed:  Number(data.nbLeadsUnsubscribed ?? 0),
     nbReplied:       Number(data.replied ?? 0),
+    _raw: res,  // temporary — remove once field mapping is confirmed
   }
 }
 
