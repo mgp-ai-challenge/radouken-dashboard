@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useEffect, useState } from "react"
+import React, { useCallback, useEffect, useRef, useState } from "react"
 import {
   Star,
   TrendingUp,
@@ -277,6 +277,7 @@ export function G2Dashboard() {
   const [syncing, setSyncing] = useState(false)
   const [lastSynced, setLastSynced] = useState<Date | null>(null)
   const [intentDays, setIntentDays] = useState(30)
+  const intentDaysRef = useRef(30)
 
   const fetchIntent = useCallback((days: number) => {
     setIntent(null)
@@ -308,7 +309,7 @@ export function G2Dashboard() {
       .catch(() => setIntentErr(true))
   }, [])
 
-  const fetchAll = useCallback((days = intentDays) => {
+  const fetchAll = useCallback(() => {
     setReviews(null)
     setProfile(null)
     setCampaigns(null)
@@ -324,7 +325,7 @@ export function G2Dashboard() {
       fetch("/api/g2/reviews").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch("/api/g2/profile").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch("/api/g2/campaigns").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
-      fetch(`/api/g2/intent?days=${days}`).then((r) => r.ok ? r.json() : Promise.reject(r.status)),
+      fetch(`/api/g2/intent?days=${intentDaysRef.current}`).then((r) => r.ok ? r.json() : Promise.reject(r.status)),
     ]).then(([r, p, c, i]) => {
       if (r.status === "fulfilled") setReviews(r.value as ReviewsData); else setReviewsErr(true)
       if (p.status === "fulfilled") setProfile(p.value as ProfileData); else setProfileErr(true)
@@ -356,7 +357,10 @@ export function G2Dashboard() {
       setLastSynced(new Date())
       setSyncing(false)
     })
-  }, [intentDays])
+  }, [])
+
+  // Keep ref in sync so fetchAll always reads the current days value
+  useEffect(() => { intentDaysRef.current = intentDays }, [intentDays])
 
   // Initial load
   useEffect(() => { fetchAll() }, [fetchAll])
