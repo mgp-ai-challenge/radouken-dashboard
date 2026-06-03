@@ -284,9 +284,9 @@ function CompanyChip({ company, type }: { company: string; type: "MQL" | "SQL" |
 }
 
 function MqlColumn({
-  label, color, attrib, sentCount, totalTrickyDeals,
+  label, color, attrib, sentCount,
 }: {
-  label: string; color: string; attrib: TrickyAttribution | null; sentCount: number | null; totalTrickyDeals: number
+  label: string; color: string; attrib: TrickyAttribution | null; sentCount: number | null
 }) {
   if (!attrib || sentCount === null) return <LoadingSkeleton h={160} />
   const sent = sentCount
@@ -355,7 +355,7 @@ export function CampaignsDashboard() {
 
     loadStats()
       .then((camps) => {
-        loadAttribution(camps).catch((err) => {
+        return loadAttribution(camps).catch((err) => {
           if ((err as Error).name === "AbortError") return
           console.error("[campaigns/attribution]", err)
           setAttribErr(String(err))
@@ -455,14 +455,12 @@ export function CampaignsDashboard() {
             color="#378ADD"
             attrib={attrib?.nc ?? null}
             sentCount={attrib?.sentCounts.nc ?? null}
-            totalTrickyDeals={attrib?.combined.totalTrickyDeals ?? 0}
           />
           <MqlColumn
             label="Customers"
             color="#534AB7"
             attrib={attrib?.cu ?? null}
             sentCount={attrib?.sentCounts.cu ?? null}
-            totalTrickyDeals={attrib?.combined.totalTrickyDeals ?? 0}
           />
         </div>
         {attrib && (
