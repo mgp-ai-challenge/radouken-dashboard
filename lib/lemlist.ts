@@ -65,7 +65,9 @@ export async function fetchAllCampaigns(): Promise<Array<{ _id: string; name: st
 }
 
 export async function fetchCampaignStats(campaignId: string): Promise<CampaignStats> {
-  const data = await llFetch(`/campaigns/${campaignId}/stats`) as Record<string, unknown>
+  const endDate = new Date().toISOString().slice(0, 10)
+  const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const data = await llFetch(`/campaigns/${campaignId}/stats?startDate=${startDate}&endDate=${endDate}`) as Record<string, unknown>
   return {
     nbLeads:          Number(data.nbLeads ?? 0),
     nbContacted:      Number(data.nbContacted ?? 0),
