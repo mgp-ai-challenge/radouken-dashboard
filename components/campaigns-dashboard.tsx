@@ -346,6 +346,7 @@ export function CampaignsDashboard() {
   }, [])
 
   const fetchAll = useCallback(() => {
+    attribAbortRef.current?.abort()
     setSyncing(true)
     setCampaigns([])
     setStatsErr(null)
@@ -353,11 +354,16 @@ export function CampaignsDashboard() {
     setAttribErr(null)
 
     loadStats()
-      .then((camps) => loadAttribution(camps))
+      .then((camps) => {
+        loadAttribution(camps).catch((err) => {
+          if ((err as Error).name === "AbortError") return
+          console.error("[campaigns/attribution]", err)
+          setAttribErr(String(err))
+        })
+      })
       .catch((err) => {
-        if ((err as Error).name === "AbortError") return
-        console.error("[campaigns]", err)
-        setAttribErr(String(err))
+        console.error("[campaigns/stats]", err)
+        setStatsErr(String(err))
       })
       .finally(() => { setSyncing(false); setLastSynced(new Date()) })
   }, [loadStats, loadAttribution])
