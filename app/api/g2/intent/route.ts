@@ -24,7 +24,7 @@ async function searchIntentCompanies(days: number): Promise<HsCompany[]> {
         ],
       },
     ],
-    properties: ["name", "domain", "g2_intent_score", "g2_buyer_intent_activity_level", "g2_buyer_intent_buying_stage", "g2_buyer_intent_details", "hs_lastmodifieddate"],
+    properties: ["name", "domain", "g2_intent_score", "g2_buyer_intent_activity_level", "g2_buyer_intent_buying_stage", "g2_buyer_intent_details", "hs_lastmodifieddate", "lifecyclestage"],
     sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
     limit: 50,
   }
@@ -82,6 +82,7 @@ export async function GET(req: Request) {
         buyingStage: c.properties.g2_buyer_intent_buying_stage ?? null,
         intentDetails: c.properties.g2_buyer_intent_details ?? null,
         lastSignalAt,
+        lifecycleStage: c.properties.lifecyclestage ?? null,
       }
     })
 

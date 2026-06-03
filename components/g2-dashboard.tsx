@@ -502,7 +502,7 @@ export function G2Dashboard() {
             <table aria-label="G2 Buyer Intent Companies" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr>
-                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal", "App"].map((col) => (
+                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal", "In HubSpot", "Lifecycle", "App"].map((col) => (
                     <th key={col} scope="col" style={{ textAlign: col === "Company" ? "left" : "center", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
                       {col}
                     </th>
@@ -555,12 +555,38 @@ export function G2Dashboard() {
                           {relTime(co.lastSignalAt)}
                         </td>
                         <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                          <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: C.accentDim, color: C.accent }}>
+                            Yes
+                          </span>
+                        </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                          {co.lifecycleStage ? (() => {
+                            const stage = co.lifecycleStage.toLowerCase()
+                            const color = stage === "customer" ? C.accent
+                              : stage === "opportunity" || stage === "salesqualifiedlead" ? C.blue
+                              : stage === "marketingqualifiedlead" || stage === "lead" ? C.amber
+                              : C.slate
+                            const bg = stage === "customer" ? C.accentDim
+                              : stage === "opportunity" || stage === "salesqualifiedlead" ? "rgba(76,158,245,0.12)"
+                              : stage === "marketingqualifiedlead" || stage === "lead" ? C.amberDim
+                              : "rgba(124,140,148,0.10)"
+                            const label = stage === "salesqualifiedlead" ? "SQL"
+                              : stage === "marketingqualifiedlead" ? "MQL"
+                              : stage.charAt(0).toUpperCase() + stage.slice(1)
+                            return (
+                              <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: bg, color }}>
+                                {label}
+                              </span>
+                            )
+                          })() : <span style={{ color: C.muted }}>—</span>}
+                        </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center" }}>
                           <AppBadge enrichment={appEnrichments.get(co.id)} loading={appEnrichmentsLoading} />
                         </td>
                       </tr>
                       {expandedRow === co.id && (
                         <tr style={{ borderBottom: i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none", background: C.cardAlt }}>
-                          <td colSpan={6} style={{ padding: "0 10px 14px 10px" }}>
+                          <td colSpan={8} style={{ padding: "0 10px 14px 10px" }}>
                             {(() => {
                               const e = appEnrichments.get(co.id)
                               if (!e || !e.hasApp) {

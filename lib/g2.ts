@@ -47,6 +47,7 @@ export interface G2IntentCompany {
   buyingStage: "awareness" | "consideration" | "decision" | null
   intentDetails: string | null
   lastSignalAt: string    // ISO date
+  lifecycleStage: string | null
 }
 
 const G2_BASE = "https://data.g2.com/api/v1"
