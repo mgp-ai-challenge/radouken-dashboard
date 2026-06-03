@@ -67,14 +67,7 @@ async function g2Fetch(path: string): Promise<unknown> {
 
 // ─── Product discovery ────────────────────────────────────────────────────────
 
-const PRODUCT_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
-let _productCache: { product: G2Product; fetchedAt: number } | null = null
-
 export async function getG2Product(): Promise<G2Product> {
-  const now = Date.now()
-  if (_productCache && now - _productCache.fetchedAt < PRODUCT_CACHE_TTL_MS) {
-    return _productCache.product
-  }
   const slug = process.env.G2_PRODUCT_SLUG
   if (!slug) throw new Error("G2_PRODUCT_SLUG environment variable is not set")
   const qs = `?filter[slug]=${encodeURIComponent(slug)}`
@@ -83,14 +76,12 @@ export async function getG2Product(): Promise<G2Product> {
     throw new Error("G2: no product found")
   }
   const item = data.data[0]
-  const product: G2Product = {
+  return {
     id: item.id,
     name: String(item.attributes.name ?? ""),
     starRating: Number(item.attributes.star_rating ?? 0),
     reviewsCount: Number(item.attributes.review_count ?? 0),
   }
-  _productCache = { product, fetchedAt: now }
-  return product
 }
 
 // ─── Reviews ──────────────────────────────────────────────────────────────────
