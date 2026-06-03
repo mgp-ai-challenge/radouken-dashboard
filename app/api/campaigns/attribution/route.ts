@@ -20,12 +20,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "nc, cu, and inbound campaign IDs are required" }, { status: 400 })
     }
 
-    // ── Step 1: Fetch all leads (paginated, rate-limited) ──────────────────
-    const [ncLeads, cuLeads, inboundLeads] = await Promise.all([
-      fetchAllLeads(ncId),
-      fetchAllLeads(cuId),
-      fetchAllLeads(inboundId),
-    ])
+    // ── Step 1: Fetch all leads sequentially to respect Lemlist rate limit ──
+    const ncLeads      = await fetchAllLeads(ncId)
+    const cuLeads      = await fetchAllLeads(cuId)
+    const inboundLeads = await fetchAllLeads(inboundId)
 
     // ── Step 2: Fetch HubSpot deals (parallel) ────────────────────────────
     const [{ deals: trickyDeals, total: totalTrickyDeals }, inboundDeals] = await Promise.all([
