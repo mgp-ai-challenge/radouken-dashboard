@@ -68,18 +68,23 @@ export async function fetchCampaignStats(campaignId: string): Promise<CampaignSt
   const endDate = new Date().toISOString().slice(0, 10)
   const startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
   const data = await llFetch(`/campaigns/${campaignId}/stats?startDate=${startDate}&endDate=${endDate}`) as Record<string, unknown>
+  const sent    = Number(data.messagesSent ?? 0)
+  const reached = Number(data.nbLeadsReached ?? 0)
+  const opened  = Number(data.opened ?? 0)
+  const clicked = Number(data.clicked ?? 0)
+  const bounced = Number(data.messagesBounced ?? 0)
   return {
-    nbLeads:          Number(data.nbLeads ?? 0),
-    nbContacted:      Number(data.nbContacted ?? 0),
-    nbEmailsSent:     Number(data.nbEmailsSent ?? 0),
-    nbEmailsOpened:   Number(data.nbEmailsOpened ?? 0),
-    openRate:         Number(data.openRate ?? 0),
-    nbEmailsClicked:  Number(data.nbEmailsClicked ?? 0),
-    clickRate:        Number(data.clickRate ?? 0),
-    nbEmailsBounced:  Number(data.nbEmailsBounced ?? 0),
-    bounceRate:       Number(data.bounceRate ?? 0),
-    nbUnsubscribed:   Number(data.nbUnsubscribed ?? 0),
-    nbReplied:        Number(data.nbReplied ?? 0),
+    nbLeads:         Number(data.nbLeads ?? 0),
+    nbContacted:     reached,
+    nbEmailsSent:    sent,
+    nbEmailsOpened:  opened,
+    openRate:        sent > 0 ? opened / sent : 0,
+    nbEmailsClicked: clicked,
+    clickRate:       sent > 0 ? clicked / sent : 0,
+    nbEmailsBounced: bounced,
+    bounceRate:      sent > 0 ? bounced / sent : 0,
+    nbUnsubscribed:  Number(data.nbLeadsUnsubscribed ?? 0),
+    nbReplied:       Number(data.replied ?? 0),
   }
 }
 
