@@ -17,10 +17,23 @@ interface STPublisher {
   os: string
 }
 
+interface STDownloads {
+  string: string
+  downloads?: number
+  prefix?: string
+  units?: string
+}
+
 interface STApp {
   app_id: string | number
   name: string
-  humanized_worldwide_last_30_days_downloads: string
+  humanized_worldwide_last_30_days_downloads: STDownloads | string | null
+}
+
+function extractDownloads(d: STApp["humanized_worldwide_last_30_days_downloads"]): string | null {
+  if (!d) return null
+  if (typeof d === "string") return d || null
+  return (d as STDownloads).string || null
 }
 
 async function stFetch(path: string): Promise<unknown> {
@@ -112,11 +125,11 @@ export async function enrichCompany(companyId: string, name: string): Promise<Ap
     if (!ios && !android) return empty
 
     if (ios && android) {
+      const iosDl = extractDownloads(ios.humanized_worldwide_last_30_days_downloads)
+      const andDl = extractDownloads(android.humanized_worldwide_last_30_days_downloads)
       const parts = [
-        ios.humanized_worldwide_last_30_days_downloads
-          ? `${ios.humanized_worldwide_last_30_days_downloads} iOS` : null,
-        android.humanized_worldwide_last_30_days_downloads
-          ? `${android.humanized_worldwide_last_30_days_downloads} Android` : null,
+        iosDl ? `${iosDl} iOS` : null,
+        andDl ? `${andDl} Android` : null,
       ].filter(Boolean)
       return {
         companyId,
@@ -132,7 +145,7 @@ export async function enrichCompany(companyId: string, name: string): Promise<Ap
       return {
         companyId, hasApp: true, platform: "ios",
         appName: ios.name,
-        monthlyDownloads: ios.humanized_worldwide_last_30_days_downloads || null,
+        monthlyDownloads: extractDownloads(ios.humanized_worldwide_last_30_days_downloads),
         storeUrl: buildStoreUrl(ios.app_id, "ios"),
       }
     }
@@ -140,7 +153,7 @@ export async function enrichCompany(companyId: string, name: string): Promise<Ap
     return {
       companyId, hasApp: true, platform: "android",
       appName: android!.name,
-      monthlyDownloads: android!.humanized_worldwide_last_30_days_downloads || null,
+      monthlyDownloads: extractDownloads(android!.humanized_worldwide_last_30_days_downloads),
       storeUrl: buildStoreUrl(android!.app_id, "android"),
     }
   } catch (err) {
