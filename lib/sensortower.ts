@@ -37,11 +37,41 @@ async function stFetch(path: string): Promise<unknown> {
   return res.json()
 }
 
+// Normalise to bare alphanumeric so "T-Mobile USA Inc." ≈ "tmobileusa"
+function norm(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "")
+}
+
+// True if either name is a substring of the other after normalising
+function namesMatch(company: string, publisher: string): boolean {
+  const a = norm(company), b = norm(publisher)
+  return a.length > 0 && b.length > 0 && (a.includes(b) || b.includes(a))
+}
+
+// Strip common legal/generic suffixes so "Webzen Inc" → "Webzen"
+function cleanName(name: string): string {
+  return name
+    .replace(/\b(inc|corp|ltd|llc|co|gmbh|ag|sa|plc|group|holdings?|international|technologies?|software|solutions|services|systems|digital|global|worldwide)\b\.?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 async function searchPublisher(name: string, store: "ios" | "android"): Promise<STPublisher | null> {
-  const data = await stFetch(
-    `/v1/${store}/search_entities?term=${encodeURIComponent(name)}&entity_type=publisher`
-  ) as STPublisher[]
-  return Array.isArray(data) && data.length > 0 ? data[0] : null
+  // Build a list of distinct search terms to try in order
+  const cleaned = cleanName(name)
+  const firstWord = cleaned.split(/\s+/)[0]
+  const variants = [...new Set([name, cleaned, firstWord].filter(Boolean))]
+
+  for (const term of variants) {
+    const data = await stFetch(
+      `/v1/${store}/search_entities?term=${encodeURIComponent(term)}&entity_type=publisher`
+    ) as STPublisher[]
+    if (!Array.isArray(data)) continue
+    // Prefer a publisher whose name actually resembles the company
+    const match = data.find((p) => namesMatch(name, p.publisher_name))
+    if (match) return match
+  }
+  return null
 }
 
 async function getTopApp(publisherId: string | number, store: "ios" | "android"): Promise<STApp | null> {
