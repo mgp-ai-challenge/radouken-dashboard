@@ -44,7 +44,7 @@ async function llFetch(path: string): Promise<unknown> {
   const key = process.env.LEMLIST_API_KEY
   if (!key) throw new Error("LEMLIST_API_KEY is not set")
   const res = await fetch(`${LL_BASE}${path}`, {
-    headers: { Authorization: `Basic ${Buffer.from(key + ":").toString("base64")}` },
+    headers: { Authorization: `Basic ${Buffer.from(":" + key).toString("base64")}` },
     cache: "no-store",
   })
   if (res.status === 401) throw new Error("Lemlist 401 — Check LEMLIST_API_KEY")
