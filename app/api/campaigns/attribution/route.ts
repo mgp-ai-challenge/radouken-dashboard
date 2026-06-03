@@ -7,7 +7,6 @@ import {
   fetchDealContactEmails,
   matchTrickyDeals,
   dedupeDeals,
-  type TrickyAttribution,
 } from "@/lib/hubspot-campaigns"
 
 export const dynamic = "force-dynamic"
@@ -16,6 +15,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json() as { nc: string; cu: string; inbound: string }
     const { nc: ncId, cu: cuId, inbound: inboundId } = body
+
+    if (!ncId || !cuId || !inboundId) {
+      return NextResponse.json({ error: "nc, cu, and inbound campaign IDs are required" }, { status: 400 })
+    }
 
     // ── Step 1: Fetch all leads (paginated, rate-limited) ──────────────────
     const [ncLeads, cuLeads, inboundLeads] = await Promise.all([
