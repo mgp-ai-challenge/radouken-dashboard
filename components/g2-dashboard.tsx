@@ -276,8 +276,39 @@ export function G2Dashboard() {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [lastSynced, setLastSynced] = useState<Date | null>(null)
+  const [intentDays, setIntentDays] = useState(30)
 
-  const fetchAll = useCallback(() => {
+  const fetchIntent = useCallback((days: number) => {
+    setIntent(null)
+    setIntentErr(false)
+    setAppEnrichments(new Map())
+    fetch(`/api/g2/intent?days=${days}`)
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((intentData: IntentData) => {
+        setIntent(intentData)
+        if (intentData.companies.length > 0) {
+          setAppEnrichmentsLoading(true)
+          fetch("/api/g2/app-enrichment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              companies: intentData.companies.map((co) => ({ id: co.id, name: co.name })),
+            }),
+          })
+            .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+            .then((data: { enrichments: AppEnrichment[] }) => {
+              const map = new Map<string, AppEnrichment>()
+              for (const e of data.enrichments) map.set(e.companyId, e)
+              setAppEnrichments(map)
+            })
+            .catch(() => { /* silent */ })
+            .finally(() => setAppEnrichmentsLoading(false))
+        }
+      })
+      .catch(() => setIntentErr(true))
+  }, [])
+
+  const fetchAll = useCallback((days = intentDays) => {
     setReviews(null)
     setProfile(null)
     setCampaigns(null)
@@ -293,7 +324,7 @@ export function G2Dashboard() {
       fetch("/api/g2/reviews").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch("/api/g2/profile").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch("/api/g2/campaigns").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
-      fetch("/api/g2/intent").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
+      fetch(`/api/g2/intent?days=${days}`).then((r) => r.ok ? r.json() : Promise.reject(r.status)),
     ]).then(([r, p, c, i]) => {
       if (r.status === "fulfilled") setReviews(r.value as ReviewsData); else setReviewsErr(true)
       if (p.status === "fulfilled") setProfile(p.value as ProfileData); else setProfileErr(true)
@@ -325,7 +356,7 @@ export function G2Dashboard() {
       setLastSynced(new Date())
       setSyncing(false)
     })
-  }, [])
+  }, [intentDays])
 
   // Initial load
   useEffect(() => { fetchAll() }, [fetchAll])
@@ -435,7 +466,31 @@ export function G2Dashboard() {
 
       {/* ── Panel 1: Buyer Intent ──────────────────────────────────────────── */}
       <Panel style={{ marginBottom: "24px" }}>
-        <SectionLabel>G2 Buyer Intent</SectionLabel>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px" }}>
+          <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0 }}>
+            G2 Buyer Intent
+          </p>
+          <div style={{ display: "flex", gap: "4px" }}>
+            {[7, 30, 60, 90].map((d) => (
+              <button
+                key={d}
+                onClick={() => { setIntentDays(d); fetchIntent(d) }}
+                style={{
+                  padding: "3px 10px",
+                  borderRadius: "6px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  border: `1px solid ${intentDays === d ? C.borderAccent : C.border}`,
+                  background: intentDays === d ? C.accentDim : "transparent",
+                  color: intentDays === d ? C.accent : C.muted,
+                }}
+              >
+                {d}d
+              </button>
+            ))}
+          </div>
+        </div>
         {intentErr ? (
           <DataError label="buyer intent" />
         ) : !intent ? (

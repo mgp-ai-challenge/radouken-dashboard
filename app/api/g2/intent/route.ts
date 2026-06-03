@@ -8,12 +8,11 @@ interface HsCompany {
   properties: Record<string, string | null>
 }
 
-async function searchIntentCompanies(): Promise<HsCompany[]> {
+async function searchIntentCompanies(days: number): Promise<HsCompany[]> {
   const token = process.env.HUBSPOT_ACCESS_TOKEN
   if (!token) throw new Error("HUBSPOT_ACCESS_TOKEN environment variable is not set")
 
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-  const afterMs = thirtyDaysAgo.getTime()
+  const afterMs = Date.now() - days * 24 * 60 * 60 * 1000
 
   // Filter companies that have G2 intent data and were modified in the last 30 days
   const body = {
@@ -50,9 +49,11 @@ async function searchIntentCompanies(): Promise<HsCompany[]> {
   return data.results ?? []
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const companies = await searchIntentCompanies()
+    const { searchParams } = new URL(req.url)
+    const days = Math.min(Math.max(Number(searchParams.get("days") ?? 30), 1), 90)
+    const companies = await searchIntentCompanies(days)
 
     const now = new Date()
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
