@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useCallback, useEffect, useState } from "react"
 import {
   Star,
   TrendingUp,
@@ -9,6 +9,7 @@ import {
   Users,
   Eye,
   Zap,
+  RefreshCw,
 } from "lucide-react"
 import {
   ComposedChart,
@@ -273,8 +274,21 @@ export function G2Dashboard() {
   const [appEnrichments, setAppEnrichments] = useState<Map<string, AppEnrichment>>(new Map())
   const [appEnrichmentsLoading, setAppEnrichmentsLoading] = useState(false)
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [lastSynced, setLastSynced] = useState<Date | null>(null)
 
-  useEffect(() => {
+  const fetchAll = useCallback(() => {
+    setReviews(null)
+    setProfile(null)
+    setCampaigns(null)
+    setIntent(null)
+    setReviewsErr(false)
+    setProfileErr(false)
+    setCampaignsErr(false)
+    setIntentErr(false)
+    setAppEnrichments(new Map())
+    setSyncing(true)
+
     Promise.allSettled([
       fetch("/api/g2/reviews").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch("/api/g2/profile").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
@@ -308,8 +322,30 @@ export function G2Dashboard() {
       } else {
         setIntentErr(true)
       }
+      setLastSynced(new Date())
+      setSyncing(false)
     })
   }, [])
+
+  // Initial load
+  useEffect(() => { fetchAll() }, [fetchAll])
+
+  // Auto-refresh at 9am local time every day
+  useEffect(() => {
+    function msUntilNextNineAm() {
+      const now = new Date()
+      const next = new Date(now)
+      next.setHours(9, 0, 0, 0)
+      if (next <= now) next.setDate(next.getDate() + 1)
+      return next.getTime() - now.getTime()
+    }
+    let timeoutId: ReturnType<typeof setTimeout>
+    function schedule() {
+      timeoutId = setTimeout(() => { fetchAll(); schedule() }, msUntilNextNineAm())
+    }
+    schedule()
+    return () => clearTimeout(timeoutId)
+  }, [fetchAll])
 
   // ── MoM profile views change ─────────────────────────────────────────────
   const viewsMoMPct = profile && profile.totalViewsLastMonth > 0
@@ -319,13 +355,40 @@ export function G2Dashboard() {
   return (
     <div style={{ background: C.bg, minHeight: "100vh", padding: "32px 36px", fontFamily: "system-ui, sans-serif" }}>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div style={{ marginBottom: "32px" }}>
-        <h1 style={{ fontSize: "22px", fontWeight: 700, color: C.sageLight, letterSpacing: "-0.02em", margin: 0 }}>
-          G2
-        </h1>
-        <p style={{ fontSize: "12px", color: C.muted, marginTop: "4px" }}>
-          Reviews, profile analytics, paid campaigns, and buyer intent signals
-        </p>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "32px" }}>
+        <div>
+          <h1 style={{ fontSize: "22px", fontWeight: 700, color: C.sageLight, letterSpacing: "-0.02em", margin: 0 }}>
+            G2
+          </h1>
+          <p style={{ fontSize: "12px", color: C.muted, marginTop: "4px" }}>
+            Reviews, profile analytics, paid campaigns, and buyer intent signals
+          </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {lastSynced && (
+            <span style={{ fontSize: "11px", color: C.muted }}>
+              Synced {lastSynced.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+            </span>
+          )}
+          <button
+            onClick={fetchAll}
+            disabled={syncing}
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: "transparent",
+              border: `1px solid ${C.borderAccent}`,
+              borderRadius: "8px",
+              padding: "7px 14px",
+              color: syncing ? C.muted : C.accent,
+              fontSize: "12px",
+              fontWeight: 600,
+              cursor: syncing ? "not-allowed" : "pointer",
+            }}
+          >
+            <RefreshCw size={12} strokeWidth={2.5} style={{ animation: syncing ? "g2-spin 1s linear infinite" : "none" }} />
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
+        </div>
       </div>
 
       {/* ── KPI Strip ──────────────────────────────────────────────────────── */}
