@@ -36,6 +36,10 @@ async function hsFetch(path: string, body?: unknown): Promise<unknown> {
     cache: "no-store",
   })
   if (res.status === 401) throw new Error("HubSpot 401 — Check HUBSPOT_ACCESS_TOKEN")
+  if (res.status === 429) {
+    const retry = res.headers.get("Retry-After") ?? "10"
+    throw new Error(`HubSpot 429 — Rate limited — retry in ${retry}s`)
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => "")
     throw new Error(`HubSpot ${path} → ${res.status}${text ? ": " + text.slice(0, 200) : ""}`)
@@ -179,7 +183,7 @@ export function dedupeDeals(a: MatchedDeal[], b: MatchedDeal[]): MatchedDeal[] {
   })
 }
 
-// Add at the bottom of lib/hubspot-campaigns.ts
+// Shared response shape — also imported by components/campaigns-dashboard.tsx
 export interface AttributionResponse {
   sentCounts: { nc: number; cu: number; inbound: number }
   nc: TrickyAttribution
