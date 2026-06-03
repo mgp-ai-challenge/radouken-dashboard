@@ -435,12 +435,7 @@ export function G2Dashboard() {
 
       {/* ── Panel 1: Buyer Intent ──────────────────────────────────────────── */}
       <Panel style={{ marginBottom: "24px" }}>
-        <SectionLabel>G2 Buyer Intent — Last 30 Days</SectionLabel>
-        {intent && (
-          <p style={{ fontSize: "12px", color: C.muted, marginTop: "-10px", marginBottom: "18px" }}>
-            {intent.totalThisMonth} companies this month · {intent.totalThisWeek} this week
-          </p>
-        )}
+        <SectionLabel>G2 Buyer Intent</SectionLabel>
         {intentErr ? (
           <DataError label="buyer intent" />
         ) : !intent ? (
