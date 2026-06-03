@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import {
   TARGET_CAMPAIGNS,
   fetchAllCampaigns,
-  fetchCampaignStats,
+  fetchAllCampaignStats,
   type DiscoveredCampaign,
 } from "@/lib/lemlist"
 
@@ -23,20 +23,17 @@ export async function GET() {
       }
     })
 
-    // Fetch stats for all found campaigns in parallel
-    const withStats: DiscoveredCampaign[] = await Promise.all(
-      discovered.map(async (c) => {
-        if (!c.id) {
-          return { ...c, stats: null, error: `Campaign not found by name — check Lemlist (match: "${TARGET_CAMPAIGNS.find(t => t.key === c.key)?.match}")` }
-        }
-        try {
-          const stats = await fetchCampaignStats(c.id)
-          return { ...c, stats, error: null }
-        } catch (err) {
-          return { ...c, stats: null, error: String(err) }
-        }
-      })
-    )
+    // Fetch stats for all found campaigns in ONE API call
+    const foundIds = discovered.flatMap((c) => c.id ? [c.id] : [])
+    const statsMap = foundIds.length > 0 ? await fetchAllCampaignStats(foundIds) : new Map()
+
+    const withStats: DiscoveredCampaign[] = discovered.map((c) => {
+      if (!c.id) {
+        return { ...c, stats: null, error: `Campaign not found by name — check Lemlist (match: "${TARGET_CAMPAIGNS.find(t => t.key === c.key)?.match}")` }
+      }
+      const stats = statsMap.get(c.id) ?? null
+      return { ...c, stats, error: null }
+    })
 
     return NextResponse.json({ campaigns: withStats })
   } catch (err) {
