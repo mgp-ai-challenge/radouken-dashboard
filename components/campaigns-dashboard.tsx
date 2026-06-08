@@ -607,11 +607,16 @@ export function CampaignsDashboard() {
 
   useEffect(() => {
     fetch("/api/campaigns/weekly-report")
-      .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((data: CampaignWeeklyReport) => { if (data && data.generatedAt) setWeeklyReport(data) })
+      .then((r) => {
+        if (r.status === 404) return null          // silently suppress — no report yet
+        if (!r.ok) return Promise.reject(new Error(`HTTP ${r.status}`))
+        return r.json() as Promise<CampaignWeeklyReport>
+      })
+      .then((data: CampaignWeeklyReport | null) => {
+        if (data && data.generatedAt) setWeeklyReport(data)
+      })
       .catch((err: unknown) => {
-        const msg = String(err)
-        if (!msg.includes("404")) setWeeklyReportErr(msg)
+        setWeeklyReportErr(err instanceof Error ? err.message : String(err))
       })
   }, [])
 
