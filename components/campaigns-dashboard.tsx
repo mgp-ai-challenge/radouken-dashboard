@@ -85,10 +85,9 @@ function DataError({ message }: { message: string }) {
 }
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
-function CampaignKpiCard({ campaign }: { campaign: DiscoveredCampaign }) {
+function CampaignKpiCard({ campaign, totalLeads }: { campaign: DiscoveredCampaign; totalLeads: number | null }) {
   const s = campaign.stats
-  const leadsReached = s?.nbContacted ?? 0
-  const nbLeads      = s?.nbLeads ?? 0
+  const delivered = s?.nbContacted ?? 0
   return (
     <Panel style={{ borderLeft: `3px solid ${campaign.color}` }}>
       <p style={{ fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.slate, marginBottom: "14px" }}>
@@ -100,15 +99,23 @@ function CampaignKpiCard({ campaign }: { campaign: DiscoveredCampaign }) {
         <LoadingSkeleton h={80} />
       ) : (
         <>
-          <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em", marginBottom: "8px" }}>
-            {s.nbLeads.toLocaleString()}
-          </p>
-          <p style={{ fontSize: "11px", color: C.muted, marginBottom: "4px" }}>leads in campaign</p>
+          {totalLeads === null
+            ? <LoadingSkeleton h={32} />
+            : <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em", marginBottom: "2px" }}>{totalLeads.toLocaleString()}</p>
+          }
+          <p style={{ fontSize: "11px", color: C.muted, marginBottom: "6px" }}>leads in campaign</p>
+          {totalLeads !== null && (s.nbCompleted > 0 || s.nbActive > 0) && (
+            <p style={{ fontSize: "11px", color: C.muted, marginBottom: "6px" }}>
+              <span style={{ color: C.sage }}>{s.nbCompleted.toLocaleString()} finished</span>
+              {s.nbActive > 0 && <span style={{ color: campaign.color }}> · {s.nbActive.toLocaleString()} active</span>}
+              {totalLeads - s.nbCompleted - s.nbActive > 0 && <span> · {(totalLeads - s.nbCompleted - s.nbActive).toLocaleString()} not started</span>}
+            </p>
+          )}
           <p style={{ fontSize: "13px", color: campaign.color, fontWeight: 600, marginBottom: "2px" }}>
-            {leadsReached.toLocaleString()} reached ({pct(leadsReached, nbLeads)})
+            {s.nbEmailsSent.toLocaleString()} sent · {delivered.toLocaleString()} delivered
           </p>
           <p style={{ fontSize: "13px", color: C.sage }}>
-            {(s.openRate * 100).toFixed(1)}% open rate
+            {(s.openRate * 100).toFixed(1)}% open · {(s.clickRate * 100).toFixed(1)}% click
           </p>
         </>
       )}
@@ -139,7 +146,7 @@ function FunnelPanel({ campaign }: { campaign: DiscoveredCampaign }) {
   if (campaign.error) return <Panel><SectionLabel>{campaign.label}</SectionLabel><DataError message={campaign.error} /></Panel>
   if (!s) return <Panel><SectionLabel>{campaign.label}</SectionLabel><LoadingSkeleton h={160} /></Panel>
 
-  const max = s.nbLeads
+  const sent    = s.nbEmailsSent
   const reached = s.nbContacted
   const opened  = s.nbEmailsOpened
   const clicked = s.nbEmailsClicked
@@ -147,10 +154,11 @@ function FunnelPanel({ campaign }: { campaign: DiscoveredCampaign }) {
   return (
     <Panel>
       <SectionLabel>{campaign.label}</SectionLabel>
-      <FunnelStep label="Leads"   count={max}     pctLabel="100%"                    color={campaign.color} maxCount={max} />
-      <FunnelStep label="Reached" count={reached} pctLabel={pct(reached, max)}       color={campaign.color} maxCount={max} />
-      <FunnelStep label="Opened"  count={opened}  pctLabel={pct(opened, reached)}    color={campaign.color} maxCount={max} />
-      <FunnelStep label="Clicked" count={clicked} pctLabel={pct(clicked, reached)}   color={campaign.color} maxCount={max} />
+      <FunnelStep label="Sent"      count={sent}    pctLabel="100%"                    color={campaign.color} maxCount={sent} />
+      <FunnelStep label="Delivered" count={reached} pctLabel={pct(reached, sent)}      color={campaign.color} maxCount={sent} />
+      <FunnelStep label="Opened"    count={opened}  pctLabel={pct(opened, reached)}    color={campaign.color} maxCount={sent} />
+      <FunnelStep label="Clicked"   count={clicked}       pctLabel={pct(clicked, reached)}       color={campaign.color} maxCount={sent} />
+      <FunnelStep label="Replied"   count={s.nbReplied}   pctLabel={pct(s.nbReplied, reached)}   color={campaign.color} maxCount={sent} />
     </Panel>
   )
 }
@@ -202,11 +210,13 @@ function StatsTable({
             </tr>
           </thead>
           <tbody>
-            <StatRow label="Leads in campaign"  count={s.nbLeads}         />
-            <StatRow label="Leads reached"       count={reached}           rate={pct(reached, s.nbLeads)}          />
+            <StatRow label="Leads in campaign"  count={sentCount ?? 0}         />
+            <StatRow label="Leads reached"       count={reached}           rate={pct(reached, sentCount ?? 0)}          />
             <StatRow label="Messages sent"       count={s.nbEmailsSent}    note="Multi-step sequence"              />
             <StatRow label="Opened"              count={s.nbEmailsOpened}  rate={pct(s.nbEmailsOpened, reached)}   />
             <StatRow label="Clicked"             count={s.nbEmailsClicked} rate={pct(s.nbEmailsClicked, reached)}  />
+            <StatRow label="Replied"             count={s.nbReplied}       rate={pct(s.nbReplied, reached)}        />
+            <StatRow label="Unsubscribed"        count={s.nbUnsubscribed}  rate={pct(s.nbUnsubscribed, reached)}   />
             <StatRow label="Bounced"             count={s.nbEmailsBounced} rate={pct(s.nbEmailsBounced, reached)}  />
             {attribution && (
               <>
@@ -243,13 +253,14 @@ function ComparisonChart({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
     name:      c.label,
     openRate:  parseFloat((c.stats!.openRate * 100).toFixed(1)),
     clickRate: parseFloat((c.stats!.clickRate * 100).toFixed(1)),
+    replyRate: parseFloat((c.stats!.nbReplied / Math.max(c.stats!.nbContacted, 1) * 100).toFixed(1)),
     color:     c.color,
   }))
 
   return (
     <Panel style={{ marginBottom: "24px" }}>
       <SectionLabel>Open &amp; Click Rate Comparison</SectionLabel>
-      <ResponsiveContainer width="100%" height={200}>
+      <ResponsiveContainer width="100%" height={240}>
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 40, left: 10, bottom: 0 }}>
           <CartesianGrid stroke={C.grid} horizontal={false} />
           <XAxis type="number" tick={{ fill: C.muted, fontSize: 10 }} axisLine={false} tickLine={false} unit="%" />
@@ -265,6 +276,9 @@ function ComparisonChart({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
           </Bar>
           <Bar dataKey="clickRate" name="Click Rate" radius={[0, 4, 4, 0]}>
             {data.map((d, i) => <Cell key={i} fill={d.color} opacity={0.45} />)}
+          </Bar>
+          <Bar dataKey="replyRate" name="Reply Rate" radius={[0, 4, 4, 0]}>
+            {data.map((d, i) => <Cell key={i} fill={d.color} opacity={0.25} />)}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -308,13 +322,15 @@ function MqlColumn({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export function CampaignsDashboard() {
-  const [campaigns, setCampaigns] = useState<DiscoveredCampaign[]>([])
-  const [statsErr,  setStatsErr]  = useState<string | null>(null)
-  const [attrib,    setAttrib]    = useState<AttributionResponse | null>(null)
-  const [attribErr, setAttribErr] = useState<string | null>(null)
-  const [syncing,   setSyncing]   = useState(false)
+  const [campaigns,  setCampaigns]  = useState<DiscoveredCampaign[]>([])
+  const [statsErr,   setStatsErr]   = useState<string | null>(null)
+  const [attrib,     setAttrib]     = useState<AttributionResponse | null>(null)
+  const [attribErr,  setAttribErr]  = useState<string | null>(null)
+  const [leadCounts, setLeadCounts] = useState<{ nc: number; cu: number; inbound: number } | null>(null)
+  const [syncing,    setSyncing]    = useState(false)
   const [lastSynced, setLastSynced] = useState<Date | null>(null)
   const attribAbortRef = useRef<AbortController | null>(null)
+  const syncGenRef     = useRef(0)
 
   const loadStats = useCallback(async () => {
     const res = await fetch("/api/campaigns/stats")
@@ -322,6 +338,17 @@ export function CampaignsDashboard() {
     const data = await res.json() as { campaigns: DiscoveredCampaign[] }
     setCampaigns(data.campaigns)
     return data.campaigns
+  }, [])
+
+  const loadLeadCounts = useCallback(async (camps: DiscoveredCampaign[]) => {
+    const nc      = camps.find((c) => c.key === "nc")?.id
+    const cu      = camps.find((c) => c.key === "cu")?.id
+    const inbound = camps.find((c) => c.key === "inbound")?.id
+    if (!nc || !cu || !inbound) return
+    const res = await fetch(`/api/campaigns/lead-counts?nc=${nc}&cu=${cu}&inbound=${inbound}`)
+    if (!res.ok) throw new Error(await res.text())
+    const data = await res.json() as { nc: number; cu: number; inbound: number }
+    setLeadCounts(data)
   }, [])
 
   const loadAttribution = useCallback(async (camps: DiscoveredCampaign[]) => {
@@ -347,23 +374,30 @@ export function CampaignsDashboard() {
 
   const fetchAll = useCallback(() => {
     attribAbortRef.current?.abort()
+    const gen = ++syncGenRef.current
     setSyncing(true)
     setCampaigns([])
     setStatsErr(null)
     setAttrib(null)
     setAttribErr(null)
+    setLeadCounts(null)
 
     // Stats are fast — stop syncing indicator once they load
     loadStats()
       .then((camps) => {
+        if (syncGenRef.current !== gen) return
         setSyncing(false)
         setLastSynced(new Date())
-        // Attribution is slow (paginated leads + HubSpot) — runs independently
-        loadAttribution(camps).catch((err) => {
-          if ((err as Error).name === "AbortError") return
-          console.error("[campaigns/attribution]", err)
-          setAttribErr(String(err))
-        })
+        // Lead counts (~10s) then attribution (~5min) — sequential to respect rate limits
+        loadLeadCounts(camps)
+          .catch((err) => console.error("[campaigns/lead-counts]", err))
+          .then(() => { if (syncGenRef.current !== gen) return; return new Promise<void>((r) => setTimeout(r, 500)) })
+          .then(() => { if (syncGenRef.current !== gen) return; return loadAttribution(camps) })
+          .catch((err) => {
+            if ((err as Error).name === "AbortError") return
+            console.error("[campaigns/attribution]", err)
+            setAttribErr(String(err))
+          })
       })
       .catch((err) => {
         console.error("[campaigns/stats]", err)
@@ -371,16 +405,11 @@ export function CampaignsDashboard() {
         setSyncing(false)
         setLastSynced(new Date())
       })
-  }, [loadStats, loadAttribution])
+  }, [loadStats, loadLeadCounts, loadAttribution])
 
   // Initial load
   useEffect(() => { fetchAll() }, [fetchAll])
 
-  // 5-minute auto-refresh
-  useEffect(() => {
-    const id = setInterval(() => { fetchAll() }, 5 * 60 * 1000)
-    return () => clearInterval(id)
-  }, [fetchAll])
 
   const nc      = campaigns.find((c) => c.key === "nc")      ?? null
   const cu      = campaigns.find((c) => c.key === "cu")      ?? null
@@ -406,7 +435,7 @@ export function CampaignsDashboard() {
 
       {/* ── Info banner ─────────────────────────────────────────────────────── */}
       <div style={{ background: "rgba(76,158,245,0.08)", border: `1px solid rgba(76,158,245,0.2)`, borderRadius: "10px", padding: "10px 16px", marginBottom: "24px", fontSize: "11px", color: C.blue, lineHeight: 1.5 }}>
-        Live data from Lemlist + HubSpot. Refreshes every 5 min. Open/click rates = % of leads reached. MQL attribution = company name fuzzy match against HubSpot Tricky pipeline.
+        Live data from Lemlist + HubSpot. Stats load in ~1s · Lead counts in ~10s · MQL attribution in ~5 min. Use Sync to refresh.
       </div>
 
       {statsErr && <div style={{ marginBottom: "20px" }}><DataError message={statsErr} /></div>}
@@ -416,7 +445,13 @@ export function CampaignsDashboard() {
         {campaigns.length === 0 ? (
           [0,1,2].map((i) => <LoadingSkeleton key={i} h={130} />)
         ) : (
-          campaigns.map((c) => <CampaignKpiCard key={c.key} campaign={c} />)
+          campaigns.map((c) => (
+          <CampaignKpiCard
+            key={c.key}
+            campaign={c}
+            totalLeads={leadCounts?.[c.key as "nc" | "cu" | "inbound"] ?? null}
+          />
+        ))
         )}
       </div>
 
