@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { generateG2WeeklyReport } from "@/lib/g2-weekly-report"
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get("authorization")
   if (!secret || auth !== `Bearer ${secret}`) {

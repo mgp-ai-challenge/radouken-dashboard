@@ -6,6 +6,7 @@ export const dynamic = "force-dynamic"
 
 export async function GET() {
   const report = readG2WeeklyReport()
+  if (!report) return NextResponse.json({ available: false }, { status: 404 })
   return NextResponse.json(report)
 }
 
@@ -15,6 +16,6 @@ export async function POST() {
     return NextResponse.json(report)
   } catch (e) {
     console.error("[g2/weekly-report]", e)
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: "Report generation failed" }, { status: 500 })
   }
 }
