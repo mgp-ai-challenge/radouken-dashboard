@@ -17,7 +17,7 @@ const DIMENSIONS: Array<{ dimension: string; key: keyof G2Review }> = [
 function windowAvg(reviews: G2Review[], key: keyof G2Review): number {
   const values = reviews
     .map((r) => r[key] as number | null)
-    .filter((v): v is number => v !== null)
+    .filter((v): v is number => typeof v === "number")
   if (values.length < 3) return 0
   return values.reduce((a, b) => a + b, 0) / values.length
 }
