@@ -269,7 +269,7 @@ function formatTelegramMessage(report: G2WeeklyReport): string {
     `📊 *G2 Intent Report — ${report.weekLabel}*`,
     ``,
     `Qualified signals: ${report.kpis.qualifiedThisWeek} this week (was ${report.kpis.qualifiedLastWeek}, ${wowDelta >= 0 ? "+" : ""}${wowDelta} WoW)`,
-    `New companies: ${report.kpis.newThisWeek} | Escalations: ${report.kpis.escalatedCount} | 🔥 Hot: ${report.kpis.hotCount}`,
+    `New companies: ${report.kpis.newThisWeek} | Escalations: ${report.kpis.escalatedCount}${report.kpis.hotCount !== undefined ? ` | 🔥 Hot: ${report.kpis.hotCount}` : ""}`,
     ``,
     report.insights,
   ].join("\n")
