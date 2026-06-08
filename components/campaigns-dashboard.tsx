@@ -85,7 +85,7 @@ function DataError({ message }: { message: string }) {
 }
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
-function CampaignKpiCard({ campaign, totalLeads }: { campaign: DiscoveredCampaign; totalLeads: number | null }) {
+function CampaignKpiCard({ campaign, totalLeads, leadCountsErr }: { campaign: DiscoveredCampaign; totalLeads: number | null; leadCountsErr?: string | null }) {
   const s = campaign.stats
   const delivered = s?.nbContacted ?? 0
   return (
@@ -99,9 +99,11 @@ function CampaignKpiCard({ campaign, totalLeads }: { campaign: DiscoveredCampaig
         <LoadingSkeleton h={80} />
       ) : (
         <>
-          {totalLeads === null
-            ? <LoadingSkeleton h={32} />
-            : <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em", marginBottom: "2px" }}>{totalLeads.toLocaleString()}</p>
+          {totalLeads === null && leadCountsErr
+            ? <DataError message="Lead count unavailable" />
+            : totalLeads === null
+              ? <LoadingSkeleton h={32} />
+              : <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em", marginBottom: "2px" }}>{totalLeads.toLocaleString()}</p>
           }
           <p style={{ fontSize: "11px", color: C.muted, marginBottom: "6px" }}>leads in campaign</p>
           {totalLeads !== null && (s.nbCompleted > 0 || s.nbActive > 0) && (
@@ -184,11 +186,12 @@ function StatRow({ label, count, rate, note, highlight }: {
 }
 
 function StatsTable({
-  campaign, attribution, sentCount,
+  campaign, attribution, sentCount, totalLeads,
 }: {
   campaign: DiscoveredCampaign
   attribution?: { mqls: { company: string }[]; sqls: { company: string; stageLabel: string }[] } | null
   sentCount?: number
+  totalLeads?: number | null
 }) {
   const s = campaign.stats
   if (campaign.error) return <Panel style={{ marginBottom: "24px" }}><SectionLabel>{campaign.label} — Detail</SectionLabel><DataError message={campaign.error} /></Panel>
@@ -210,7 +213,7 @@ function StatsTable({
             </tr>
           </thead>
           <tbody>
-            <StatRow label="Leads in campaign"  count={sentCount ?? 0}         />
+            <StatRow label="Leads in campaign"  count={totalLeads ?? sentCount ?? 0}         />
             <StatRow label="Leads reached"       count={reached}           rate={pct(reached, sentCount ?? 0)}          />
             <StatRow label="Messages sent"       count={s.nbEmailsSent}    note="Multi-step sequence"              />
             <StatRow label="Opened"              count={s.nbEmailsOpened}  rate={pct(s.nbEmailsOpened, reached)}   />
@@ -326,8 +329,9 @@ export function CampaignsDashboard() {
   const [statsErr,   setStatsErr]   = useState<string | null>(null)
   const [attrib,     setAttrib]     = useState<AttributionResponse | null>(null)
   const [attribErr,  setAttribErr]  = useState<string | null>(null)
-  const [leadCounts, setLeadCounts] = useState<{ nc: number; cu: number; inbound: number } | null>(null)
-  const [syncing,    setSyncing]    = useState(false)
+  const [leadCounts,    setLeadCounts]    = useState<{ nc: number; cu: number; inbound: number } | null>(null)
+  const [leadCountsErr, setLeadCountsErr] = useState<string | null>(null)
+  const [syncing,       setSyncing]       = useState(false)
   const [lastSynced, setLastSynced] = useState<Date | null>(null)
   const attribAbortRef = useRef<AbortController | null>(null)
   const syncGenRef     = useRef(0)
@@ -340,15 +344,14 @@ export function CampaignsDashboard() {
     return data.campaigns
   }, [])
 
-  const loadLeadCounts = useCallback(async (camps: DiscoveredCampaign[]) => {
+  const loadLeadCounts = useCallback(async (camps: DiscoveredCampaign[]): Promise<{ nc: number; cu: number; inbound: number } | null> => {
     const nc      = camps.find((c) => c.key === "nc")?.id
     const cu      = camps.find((c) => c.key === "cu")?.id
     const inbound = camps.find((c) => c.key === "inbound")?.id
-    if (!nc || !cu || !inbound) return
+    if (!nc || !cu || !inbound) return null
     const res = await fetch(`/api/campaigns/lead-counts?nc=${nc}&cu=${cu}&inbound=${inbound}`)
     if (!res.ok) throw new Error(await res.text())
-    const data = await res.json() as { nc: number; cu: number; inbound: number }
-    setLeadCounts(data)
+    return await res.json() as { nc: number; cu: number; inbound: number }
   }, [])
 
   const loadAttribution = useCallback(async (camps: DiscoveredCampaign[]) => {
@@ -381,6 +384,7 @@ export function CampaignsDashboard() {
     setAttrib(null)
     setAttribErr(null)
     setLeadCounts(null)
+    setLeadCountsErr(null)
 
     // Stats are fast — stop syncing indicator once they load
     loadStats()
@@ -390,7 +394,15 @@ export function CampaignsDashboard() {
         setLastSynced(new Date())
         // Lead counts (~10s) then attribution (~5min) — sequential to respect rate limits
         loadLeadCounts(camps)
-          .catch((err) => console.error("[campaigns/lead-counts]", err))
+          .then((counts) => {
+            if (syncGenRef.current !== gen) return
+            if (counts) setLeadCounts(counts)
+          })
+          .catch((err) => {
+            if (syncGenRef.current !== gen) return
+            console.error("[campaigns/lead-counts]", err)
+            setLeadCountsErr(String(err))
+          })
           .then(() => { if (syncGenRef.current !== gen) return; return new Promise<void>((r) => setTimeout(r, 500)) })
           .then(() => { if (syncGenRef.current !== gen) return; return loadAttribution(camps) })
           .catch((err) => {
@@ -446,12 +458,13 @@ export function CampaignsDashboard() {
           [0,1,2].map((i) => <LoadingSkeleton key={i} h={130} />)
         ) : (
           campaigns.map((c) => (
-          <CampaignKpiCard
-            key={c.key}
-            campaign={c}
-            totalLeads={leadCounts?.[c.key as "nc" | "cu" | "inbound"] ?? null}
-          />
-        ))
+            <CampaignKpiCard
+              key={c.key}
+              campaign={c}
+              totalLeads={leadCounts?.[c.key as "nc" | "cu" | "inbound"] ?? null}
+              leadCountsErr={leadCountsErr}
+            />
+          ))
         )}
       </div>
 
@@ -470,6 +483,7 @@ export function CampaignsDashboard() {
           campaign={nc}
           attribution={attrib ? { mqls: attrib.nc.mqls, sqls: attrib.nc.sqls } : null}
           sentCount={attrib?.sentCounts.nc}
+          totalLeads={leadCounts?.nc}
         />
       )}
       {cu && (
@@ -477,6 +491,7 @@ export function CampaignsDashboard() {
           campaign={cu}
           attribution={attrib ? { mqls: attrib.cu.mqls, sqls: attrib.cu.sqls } : null}
           sentCount={attrib?.sentCounts.cu}
+          totalLeads={leadCounts?.cu}
         />
       )}
       {inbound && (
