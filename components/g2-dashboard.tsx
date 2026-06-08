@@ -685,7 +685,7 @@ export function G2Dashboard() {
                     label="Competitor"
                     options={[
                       { value: "all", display: "All" },
-                      ...competitorTally.slice(0, 5).map(({ name }) => ({ value: name, display: name })),
+                      ...competitorTally.slice(0, 8).map(({ name }) => ({ value: name, display: name })),
                     ]}
                     active={filterRelatedProduct}
                     onSelect={setFilterRelatedProduct}
