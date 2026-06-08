@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useEffect, useRef, useState } from "react"
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Star,
   TrendingUp,
@@ -22,6 +22,7 @@ import {
   LabelList,
 } from "recharts"
 import type { G2Review, G2Product, G2ProfileView, G2Rank, G2Campaign, G2IntentCompany } from "@/lib/g2"
+import type { G2WeeklyReport } from "@/lib/g2-weekly-report"
 import type { AppEnrichment } from "@/lib/sensortower"
 
 // ─── Design system (duplicated from self-serve-dashboard.tsx) ─────────────────
@@ -274,6 +275,28 @@ export function G2Dashboard() {
   const [appEnrichments, setAppEnrichments] = useState<Map<string, AppEnrichment>>(new Map())
   const [appEnrichmentsLoading, setAppEnrichmentsLoading] = useState(false)
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [filterStage,     setFilterStage]     = useState<string>("all")
+  const [filterScore,     setFilterScore]     = useState<number>(0)
+  const [filterLifecycle, setFilterLifecycle] = useState<string>("all")
+  const [filterApp,       setFilterApp]       = useState<string>("all")
+
+  const [g2Report,           setG2Report]           = useState<G2WeeklyReport | null>(null)
+  const [g2ReportLoading,    setG2ReportLoading]    = useState(true)
+  const [g2ReportGenerating, setG2ReportGenerating] = useState(false)
+  const [g2ReportErr,        setG2ReportErr]        = useState<string | null>(null)
+
+  const filteredCompanies = useMemo(() => {
+    if (!intent) return []
+    return intent.companies.filter((co) => {
+      if (filterStage !== "all" && co.buyingStage !== filterStage) return false
+      if (filterScore > 0 && (co.intentScore === null || co.intentScore < filterScore)) return false
+      if (filterLifecycle !== "all" && (co.lifecycleStage?.toLowerCase() ?? "") !== filterLifecycle) return false
+      if (filterApp === "yes" && !appEnrichments.get(co.id)?.hasApp) return false
+      if (filterApp === "no"  && appEnrichments.get(co.id)?.hasApp)  return false
+      return true
+    })
+  }, [intent, filterStage, filterScore, filterLifecycle, filterApp, appEnrichments])
+
   const [syncing, setSyncing] = useState(false)
   const [lastSynced, setLastSynced] = useState<Date | null>(null)
   const [intentDays, setIntentDays] = useState(30)
@@ -320,13 +343,15 @@ export function G2Dashboard() {
     setIntentErr(false)
     setAppEnrichments(new Map())
     setSyncing(true)
+    setG2ReportLoading(true)
 
     Promise.allSettled([
       fetch("/api/g2/reviews").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch("/api/g2/profile").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch("/api/g2/campaigns").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch(`/api/g2/intent?days=${intentDaysRef.current}`).then((r) => r.ok ? r.json() : Promise.reject(r.status)),
-    ]).then(([r, p, c, i]) => {
+      fetch("/api/g2/weekly-report").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
+    ]).then(([r, p, c, i, wr]) => {
       if (r.status === "fulfilled") setReviews(r.value as ReviewsData); else setReviewsErr(true)
       if (p.status === "fulfilled") setProfile(p.value as ProfileData); else setProfileErr(true)
       if (c.status === "fulfilled") setCampaigns(c.value as CampaignsData); else setCampaignsErr(true)
@@ -354,6 +379,10 @@ export function G2Dashboard() {
       } else {
         setIntentErr(true)
       }
+      if (wr.status === "fulfilled") {
+        setG2Report(wr.value as G2WeeklyReport | null)
+      }
+      setG2ReportLoading(false)
       setLastSynced(new Date())
       setSyncing(false)
     })
@@ -427,7 +456,7 @@ export function G2Dashboard() {
       </div>
 
       {/* ── KPI Strip ──────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "14px", marginBottom: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px", marginBottom: "24px" }}>
         <KpiCard
           label="Star Rating"
           value={reviews ? `${reviews.product.starRating.toFixed(1)} ★` : "—"}
@@ -445,15 +474,6 @@ export function G2Dashboard() {
           Icon={Users}
           accent={C.blue}
           sub={<span style={{ fontSize: "11px", color: C.muted }}>all time</span>}
-        />
-        <KpiCard
-          label="Profile Views"
-          value={profile ? fmtNum(profile.totalViewsThisMonth) : "—"}
-          Icon={Eye}
-          accent={C.purple}
-          sub={profile && (
-            <TrendBadge value={viewsMoMPct} label="MoM" />
-          )}
         />
         <KpiCard
           label={`Intent Signals · Last ${intentDays}d`}
@@ -491,6 +511,112 @@ export function G2Dashboard() {
             ))}
           </div>
         </div>
+
+        {/* ── Filter bar ─────────────────────────────────────────────────────── */}
+        {intent && intent.companies.length > 0 && (() => {
+          const lifecycleOptions = ["all", ...Array.from(new Set(
+            intent.companies.map((c) => c.lifecycleStage?.toLowerCase() ?? "").filter(Boolean)
+          )).sort()]
+
+          function FilterPills<T extends string | number>({
+            label, options, active, onSelect,
+          }: {
+            label: string
+            options: { value: T; display: string }[]
+            active: T
+            onSelect: (v: T) => void
+          }) {
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, whiteSpace: "nowrap" }}>{label}</span>
+                {options.map(({ value, display }) => {
+                  const on = active === value
+                  return (
+                    <button
+                      key={String(value)}
+                      onClick={() => onSelect(value)}
+                      style={{
+                        padding: "2px 9px", borderRadius: "6px", fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                        border: `1px solid ${on ? C.borderAccent : C.border}`,
+                        background: on ? C.accentDim : "transparent",
+                        color: on ? C.accent : C.muted,
+                      }}
+                    >
+                      {display}
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          }
+
+          const lifecycleLabel = (s: string) =>
+            s === "all" ? "All"
+            : s === "salesqualifiedlead" ? "SQL"
+            : s === "marketingqualifiedlead" ? "MQL"
+            : s.charAt(0).toUpperCase() + s.slice(1)
+
+          const hasActiveFilter = filterStage !== "all" || filterScore > 0 || filterLifecycle !== "all" || filterApp !== "all"
+
+          return (
+            <div style={{
+              display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center",
+              borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
+              padding: "10px 0", marginBottom: "16px",
+            }}>
+              <FilterPills
+                label="Stage"
+                options={[
+                  { value: "all", display: "All" },
+                  { value: "awareness", display: "Awareness" },
+                  { value: "consideration", display: "Consideration" },
+                  { value: "decision", display: "Decision" },
+                ]}
+                active={filterStage}
+                onSelect={setFilterStage}
+              />
+              <div style={{ width: "1px", height: "18px", background: C.border }} />
+              <FilterPills
+                label="Score"
+                options={[
+                  { value: 0,  display: "All" },
+                  { value: 50, display: "50+" },
+                  { value: 70, display: "70+" },
+                  { value: 90, display: "90+" },
+                ]}
+                active={filterScore}
+                onSelect={setFilterScore}
+              />
+              <div style={{ width: "1px", height: "18px", background: C.border }} />
+              <FilterPills
+                label="Lifecycle"
+                options={lifecycleOptions.map((s) => ({ value: s, display: lifecycleLabel(s) }))}
+                active={filterLifecycle}
+                onSelect={setFilterLifecycle}
+              />
+              <div style={{ width: "1px", height: "18px", background: C.border }} />
+              <FilterPills
+                label="App"
+                options={[
+                  { value: "all", display: "All" },
+                  { value: "yes", display: "Has App" },
+                  { value: "no",  display: "No App"  },
+                ]}
+                active={filterApp}
+                onSelect={setFilterApp}
+              />
+              {hasActiveFilter && (
+                <button
+                  onClick={() => { setFilterStage("all"); setFilterScore(0); setFilterLifecycle("all"); setFilterApp("all") }}
+                  style={{ marginLeft: "auto", fontSize: "11px", color: C.muted, background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px" }}
+                >
+                  Clear filters ×
+                </button>
+              )}
+            </div>
+          )
+        })()}
+
         {intentErr ? (
           <DataError label="buyer intent" />
         ) : !intent ? (
@@ -502,11 +628,61 @@ export function G2Dashboard() {
             No intent signals found. Verify G2–HubSpot integration is active.
           </p>
         ) : (
+          <>
+          {/* ── Intelligence summary bar ─────────────────────────────── */}
+          {(() => {
+            const productTally = new Map<string, number>()
+            for (const co of filteredCompanies) {
+              if (co.productName) productTally.set(co.productName, (productTally.get(co.productName) ?? 0) + 1)
+              for (const p of co.relatedProducts) productTally.set(p, (productTally.get(p) ?? 0) + 1)
+            }
+            const topProducts = [...productTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+
+            const industryTally = new Map<string, number>()
+            for (const co of filteredCompanies) {
+              if (co.industry) industryTally.set(co.industry, (industryTally.get(co.industry) ?? 0) + 1)
+            }
+            const topIndustries = [...industryTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
+
+            if (topProducts.length === 0 && topIndustries.length === 0) return null
+            return (
+              <div style={{
+                display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center",
+                background: C.cardAlt, border: `1px solid ${C.border}`,
+                borderRadius: "10px", padding: "10px 14px", marginBottom: "16px",
+                fontSize: "11px",
+              }}>
+                {topProducts.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span style={{ color: C.muted, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "10px" }}>Top researched</span>
+                    {topProducts.map(([name, count]) => (
+                      <span key={name} style={{ padding: "2px 8px", borderRadius: "999px", background: C.amberDim, color: C.amber, fontWeight: 600 }}>
+                        {name} × {count}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {topProducts.length > 0 && topIndustries.length > 0 && (
+                  <div style={{ width: "1px", height: "18px", background: C.border, flexShrink: 0 }} />
+                )}
+                {topIndustries.length > 0 && (
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span style={{ color: C.muted, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "10px" }}>Industries</span>
+                    {topIndustries.map(([name, count]) => (
+                      <span key={name} style={{ padding: "2px 8px", borderRadius: "999px", background: "rgba(76,158,245,0.10)", color: C.blue, fontWeight: 600 }}>
+                        {name} × {count}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
           <div style={{ overflowX: "auto" }}>
             <table aria-label="G2 Buyer Intent Companies" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr>
-                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal", "In HubSpot", "Lifecycle", "App"].map((col) => (
+                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal", "In HubSpot", "Lifecycle", "Products", "App"].map((col) => (
                     <th key={col} scope="col" style={{ textAlign: col === "Company" ? "left" : "center", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
                       {col}
                     </th>
@@ -514,7 +690,9 @@ export function G2Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {intent.companies.slice(0, 50).map((co, i) => {
+                {filteredCompanies.length === 0 ? (
+                  <tr><td colSpan={9} style={{ padding: "32px 0", textAlign: "center", color: C.muted, fontSize: "12px" }}>No companies match the current filters.</td></tr>
+                ) : filteredCompanies.map((co, i) => {
                   const activityColor = co.activityLevel === "high" ? C.accent : co.activityLevel === "medium" ? C.amber : C.slate
                   const activityBg   = co.activityLevel === "high" ? C.accentDim : co.activityLevel === "medium" ? C.amberDim : "rgba(124,140,148,0.10)"
                   const stageColor   = co.buyingStage === "decision" ? C.accent : co.buyingStage === "consideration" ? C.blue : C.slate
@@ -524,14 +702,28 @@ export function G2Dashboard() {
                     <React.Fragment key={co.id}>
                       <tr
                         onClick={() => setExpandedRow(expandedRow === co.id ? null : co.id)}
-                        style={{ borderBottom: expandedRow === co.id ? "none" : i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
+                        style={{ borderBottom: expandedRow === co.id ? "none" : i < filteredCompanies.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
                       >
-                        <td style={{ padding: "10px 10px", maxWidth: "220px" }}>
-                          <a href={hsUrl} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} style={{ color: C.sage, textDecoration: "none", fontWeight: 500 }}
-                            onMouseEnter={(e) => (e.currentTarget.style.color = C.accentBright)}
-                            onMouseLeave={(e) => (e.currentTarget.style.color = C.sage)}>
-                            {co.name || "—"}
-                          </a>
+                        <td style={{ padding: "10px 10px", maxWidth: "240px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <a href={hsUrl} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} style={{ color: C.sage, textDecoration: "none", fontWeight: 500 }}
+                              onMouseEnter={(e) => (e.currentTarget.style.color = C.accentBright)}
+                              onMouseLeave={(e) => (e.currentTarget.style.color = C.sage)}>
+                              {co.name || "—"}
+                            </a>
+                            {co.signalsPage && (
+                              <a href={co.signalsPage} target="_blank" rel="noreferrer" onClick={(ev) => ev.stopPropagation()} title="G2 Signals page" style={{ color: C.muted, textDecoration: "none", fontSize: "10px", lineHeight: 1 }}
+                                onMouseEnter={(e) => (e.currentTarget.style.color = C.accent)}
+                                onMouseLeave={(e) => (e.currentTarget.style.color = C.muted)}>
+                                ↗
+                              </a>
+                            )}
+                          </div>
+                          {co.industry && (
+                            <span style={{ display: "inline-block", marginTop: "4px", padding: "1px 6px", borderRadius: "999px", fontSize: "9px", fontWeight: 600, background: "rgba(76,158,245,0.10)", color: C.blue }}>
+                              {co.industry}
+                            </span>
+                          )}
                           {co.intentDetails && (
                             <p style={{ fontSize: "10px", color: C.muted, marginTop: "3px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } as React.CSSProperties}>
                               {co.intentDetails}
@@ -584,48 +776,94 @@ export function G2Dashboard() {
                             )
                           })() : <span style={{ color: C.muted }}>—</span>}
                         </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center", maxWidth: "160px" }}>
+                          {(() => {
+                            const all = [
+                              ...(co.productName ? [co.productName] : []),
+                              ...co.relatedProducts,
+                            ]
+                            if (all.length === 0) return <span style={{ color: C.muted }}>—</span>
+                            const visible = all.slice(0, 2)
+                            const extra = all.length - visible.length
+                            return (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", justifyContent: "center" }}>
+                                {visible.map((p) => (
+                                  <span key={p} style={{ padding: "2px 7px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: C.amberDim, color: C.amber, whiteSpace: "nowrap" }}>
+                                    {p}
+                                  </span>
+                                ))}
+                                {extra > 0 && (
+                                  <span style={{ padding: "2px 7px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: "rgba(124,140,148,0.10)", color: C.slate }}>
+                                    +{extra}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })()}
+                        </td>
                         <td style={{ padding: "10px 10px", textAlign: "center" }}>
                           <AppBadge enrichment={appEnrichments.get(co.id)} loading={appEnrichmentsLoading} />
                         </td>
                       </tr>
                       {expandedRow === co.id && (
-                        <tr style={{ borderBottom: i < Math.min(intent.companies.length, 50) - 1 ? `1px solid ${C.border}` : "none", background: C.cardAlt }}>
-                          <td colSpan={8} style={{ padding: "0 10px 14px 10px" }}>
-                            {(() => {
-                              const e = appEnrichments.get(co.id)
-                              if (!e || !e.hasApp) {
-                                return (
-                                  <p style={{ fontSize: "12px", color: C.muted, padding: "10px 0" }}>
-                                    No mobile app found for this publisher.
-                                  </p>
-                                )
-                              }
-                              return (
-                                <div style={{ display: "flex", gap: "24px", alignItems: "center", padding: "10px 0", flexWrap: "wrap" }}>
-                                  <div>
-                                    <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>App</p>
-                                    <p style={{ fontSize: "13px", fontWeight: 600, color: C.sageLight }}>{e.appName}</p>
-                                  </div>
-                                  {e.monthlyDownloads && (
-                                    <div>
-                                      <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>Downloads / mo</p>
-                                      <p style={{ fontSize: "13px", fontFamily: MONO, color: C.sageLight }}>{e.monthlyDownloads}</p>
+                        <tr style={{ borderBottom: i < filteredCompanies.length - 1 ? `1px solid ${C.border}` : "none", background: C.cardAlt }}>
+                          <td colSpan={9} style={{ padding: "0 10px 14px 10px" }}>
+                            <div style={{ display: "flex", gap: "32px", flexWrap: "wrap", padding: "10px 0" }}>
+                              {/* G2 Research section */}
+                              {(co.relatedProducts.length > 0 || co.relatedProductDetails) && (
+                                <div style={{ minWidth: "220px", maxWidth: "380px" }}>
+                                  <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "8px" }}>G2 Research</p>
+                                  {co.relatedProducts.length > 0 && (
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "8px" }}>
+                                      {co.relatedProducts.map((p) => (
+                                        <span key={p} style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "11px", fontWeight: 600, background: C.amberDim, color: C.amber }}>
+                                          {p}
+                                        </span>
+                                      ))}
                                     </div>
                                   )}
-                                  {e.storeUrl && (
-                                    <a
-                                      href={e.storeUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      onClick={(ev) => ev.stopPropagation()}
-                                      style={{ fontSize: "12px", color: C.accent, textDecoration: "none", border: `1px solid ${C.borderAccent}`, padding: "4px 12px", borderRadius: "6px" }}
-                                    >
-                                      View in Store ↗
-                                    </a>
+                                  {co.relatedProductDetails && (
+                                    <p style={{ fontSize: "11px", color: C.slate, lineHeight: 1.5 }}>{co.relatedProductDetails}</p>
                                   )}
                                 </div>
-                              )
-                            })()}
+                              )}
+                              {/* App section */}
+                              {(() => {
+                                const e = appEnrichments.get(co.id)
+                                if (!e || !e.hasApp) {
+                                  return (
+                                    <p style={{ fontSize: "12px", color: C.muted, alignSelf: "center" }}>
+                                      No mobile app found for this publisher.
+                                    </p>
+                                  )
+                                }
+                                return (
+                                  <div style={{ display: "flex", gap: "24px", alignItems: "center", flexWrap: "wrap" }}>
+                                    <div>
+                                      <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>App</p>
+                                      <p style={{ fontSize: "13px", fontWeight: 600, color: C.sageLight }}>{e.appName}</p>
+                                    </div>
+                                    {e.monthlyDownloads && (
+                                      <div>
+                                        <p style={{ fontSize: "11px", color: C.muted, marginBottom: "2px" }}>Downloads / mo</p>
+                                        <p style={{ fontSize: "13px", fontFamily: MONO, color: C.sageLight }}>{e.monthlyDownloads}</p>
+                                      </div>
+                                    )}
+                                    {e.storeUrl && (
+                                      <a
+                                        href={e.storeUrl}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        onClick={(ev) => ev.stopPropagation()}
+                                        style={{ fontSize: "12px", color: C.accent, textDecoration: "none", border: `1px solid ${C.borderAccent}`, padding: "4px 12px", borderRadius: "6px" }}
+                                      >
+                                        View in Store ↗
+                                      </a>
+                                    )}
+                                  </div>
+                                )
+                              })()}
+                            </div>
                           </td>
                         </tr>
                       )}
@@ -635,6 +873,7 @@ export function G2Dashboard() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Panel>
 
@@ -693,36 +932,51 @@ export function G2Dashboard() {
           <LoadingSkeleton h={220} />
         ) : (
           <div style={{ display: "flex", gap: "24px", alignItems: "stretch" }}>
-            {/* Category Rank card */}
+            {/* Product Ratings card */}
             <div style={{
-              width: "35%", flexShrink: 0,
+              width: "38%", flexShrink: 0,
               background: C.cardAlt, border: `1px solid ${C.border}`,
               borderRadius: "12px", padding: "20px",
-              display: "flex", flexDirection: "column", justifyContent: "center",
+              display: "flex", flexDirection: "column", gap: "14px",
             }}>
-              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginBottom: "12px" }}>
-                Category Rank
-              </p>
-              <p style={{ fontSize: "52px", fontWeight: 700, lineHeight: 1, color: C.accent, fontFamily: MONO, letterSpacing: "-0.03em", marginBottom: "8px" }}>
-                {profile.rank.rank > 0 ? `#${profile.rank.rank}` : "—"}
-              </p>
-              <p style={{ fontSize: "12px", color: C.sage, marginBottom: "12px" }}>
-                {profile.rank.category || "—"}
-              </p>
-              {profile.rank.rankChange !== 0 ? (
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: "4px",
-                  background: profile.rank.rankChange > 0 ? C.accentDim : C.redDim,
-                  color: profile.rank.rankChange > 0 ? C.accent : C.red,
-                  padding: "3px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 600,
-                  alignSelf: "flex-start",
-                }}>
-                  {profile.rank.rankChange > 0 ? "↑" : "↓"}
-                  {Math.abs(profile.rank.rankChange)} this month
-                </span>
-              ) : (
-                <span style={{ fontSize: "11px", color: C.muted }}>— no change</span>
-              )}
+              <div>
+                <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginBottom: "4px" }}>
+                  Product Ratings
+                </p>
+                <p style={{ fontSize: "11px", color: C.slate }}>{profile.rank.category || "—"}</p>
+              </div>
+              {([
+                { label: "Ease of Use",    prod: profile.rank.productScores?.easeOfUse       ?? 0, cat: profile.rank.categoryScores?.easeOfUse       ?? 0 },
+                { label: "Support",        prod: profile.rank.productScores?.qualityOfSupport ?? 0, cat: profile.rank.categoryScores?.qualityOfSupport ?? 0 },
+                { label: "Ease of Setup",  prod: profile.rank.productScores?.easeOfSetup      ?? 0, cat: profile.rank.categoryScores?.easeOfSetup      ?? 0 },
+              ]).map(({ label, prod, cat }) => (
+                <div key={label}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                    <span style={{ fontSize: "11px", color: C.slate }}>{label}</span>
+                    <span style={{ fontSize: "11px", fontFamily: MONO, color: C.sageLight, fontWeight: 600 }}>
+                      {prod > 0 ? prod.toFixed(1) : "—"}
+                      {cat > 0 && <span style={{ color: C.muted, fontWeight: 400 }}> / {cat.toFixed(1)} avg</span>}
+                    </span>
+                  </div>
+                  {prod > 0 && (
+                    <div style={{ position: "relative", height: "6px", borderRadius: "999px", background: C.border, overflow: "visible" }}>
+                      {/* category avg marker */}
+                      {cat > 0 && (
+                        <div style={{
+                          position: "absolute", top: "-3px", bottom: "-3px", width: "2px",
+                          left: `${(cat / 10) * 100}%`, background: C.muted, borderRadius: "1px",
+                        }} />
+                      )}
+                      {/* product bar */}
+                      <div style={{
+                        height: "100%", borderRadius: "999px",
+                        width: `${(prod / 10) * 100}%`,
+                        background: `linear-gradient(90deg, ${C.accent}, ${C.accentBright})`,
+                      }} />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
 
             {/* Weekly views chart */}
@@ -761,59 +1015,102 @@ export function G2Dashboard() {
         )}
       </Panel>
 
-      {/* ── Panel 4: Paid Campaigns ─────────────────────────────────────────── */}
-      <Panel>
-        <SectionLabel>Paid Campaigns</SectionLabel>
-        {campaignsErr ? (
-          <DataError label="campaigns" />
-        ) : !campaigns ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {[40, 40, 40].map((h, i) => <LoadingSkeleton key={i} h={h} />)}
+      {/* ── Panel 4: Weekly Intent Report ─────────────────────────────────────── */}
+      <Panel style={{ marginTop: "24px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "18px" }}>
+          <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0 }}>
+            Weekly Intent Report
+          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {g2Report && (
+              <span style={{ fontSize: "11px", color: C.muted }}>
+                {new Date(g2Report.generatedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+              </span>
+            )}
+            <button
+              onClick={async () => {
+                setG2ReportGenerating(true)
+                setG2ReportErr(null)
+                try {
+                  const res = await fetch("/api/g2/weekly-report", { method: "POST" })
+                  if (!res.ok) throw new Error(`${res.status}`)
+                  const report = await res.json() as G2WeeklyReport
+                  setG2Report(report)
+                } catch (e) {
+                  setG2ReportErr(String(e))
+                } finally {
+                  setG2ReportGenerating(false)
+                }
+              }}
+              disabled={g2ReportGenerating}
+              style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                background: "transparent",
+                border: `1px solid ${C.borderAccent}`,
+                borderRadius: "8px",
+                padding: "7px 14px",
+                color: g2ReportGenerating ? C.muted : C.accent,
+                fontSize: "12px", fontWeight: 600,
+                cursor: g2ReportGenerating ? "not-allowed" : "pointer",
+              }}
+            >
+              <RefreshCw size={12} strokeWidth={2.5} style={{ animation: g2ReportGenerating ? "g2-spin 1s linear infinite" : "none" }} />
+              {g2ReportGenerating ? "Generating…" : "Generate"}
+            </button>
           </div>
-        ) : campaigns.campaigns.length === 0 ? (
+        </div>
+
+        {g2ReportErr && (
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", color: C.red, fontSize: "12px", marginBottom: "16px" }}>
+            <AlertCircle size={14} /> {g2ReportErr}
+          </div>
+        )}
+
+        {g2ReportLoading ? (
+          <LoadingSkeleton h={180} />
+        ) : !g2Report ? (
           <p style={{ fontSize: "13px", color: C.muted, textAlign: "center", padding: "32px 0" }}>
-            No campaign data available.
+            No report generated yet. Click Generate to create the first one.
           </p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table aria-label="Paid Campaigns" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-              <thead>
-                <tr>
-                  {["Campaign", "Status", "Impressions", "Clicks", "CTR", "Spend"].map((col) => (
-                    <th key={col} scope="col" style={{ textAlign: col === "Campaign" ? "left" : "right", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {campaigns.campaigns.map((c, i) => (
-                  <tr key={c.id} style={{ borderBottom: i < campaigns.campaigns.length - 1 ? `1px solid ${C.border}` : "none" }}>
-                    <td style={{ padding: "10px 10px", color: C.sage, maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {c.name}
-                    </td>
-                    <td style={{ padding: "10px 10px", textAlign: "right" }}>
-                      <span style={{
-                        padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600,
-                        background: c.status === "active" ? C.accentDim : c.status === "paused" ? C.amberDim : "rgba(124,140,148,0.12)",
-                        color: c.status === "active" ? C.accent : c.status === "paused" ? C.amber : C.slate,
-                      }}>
-                        {c.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{fmtNum(c.impressions)}</td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{fmtNum(c.clicks)}</td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sage }}>{c.ctr.toFixed(2)}%</td>
-                    <td style={{ padding: "10px 10px", textAlign: "right", fontFamily: MONO, color: C.sageLight, fontWeight: 600 }}>
-                      ${fmtNum(c.spend)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div>
+            {/* KPI chips */}
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "20px" }}>
+              {([
+                { label: "Qualified this week", value: String(g2Report.kpis.qualifiedThisWeek), accent: C.accent },
+                {
+                  label: "vs last week",
+                  value: (() => {
+                    const d = g2Report.kpis.qualifiedThisWeek - g2Report.kpis.qualifiedLastWeek
+                    return `${d >= 0 ? "+" : ""}${d}`
+                  })(),
+                  accent: (g2Report.kpis.qualifiedThisWeek - g2Report.kpis.qualifiedLastWeek) >= 0 ? C.accent : C.red,
+                },
+                { label: "New this week", value: String(g2Report.kpis.newThisWeek), accent: C.blue },
+                { label: "Escalations", value: String(g2Report.kpis.escalatedCount), accent: C.amber },
+              ]).map(({ label, value, accent }) => (
+                <div key={label} style={{
+                  background: C.cardAlt, border: `1px solid ${C.border}`,
+                  borderRadius: "10px", padding: "10px 16px",
+                }}>
+                  <p style={{ fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "4px" }}>{label}</p>
+                  <p style={{ fontSize: "24px", fontWeight: 700, fontFamily: MONO, color: accent, lineHeight: 1 }}>{value}</p>
+                </div>
+              ))}
+            </div>
+            {/* Claude insights */}
+            <div style={{
+              background: C.cardAlt, border: `1px solid ${C.border}`,
+              borderRadius: "10px", padding: "16px 20px",
+              fontSize: "12px", color: C.slate, lineHeight: "1.7",
+              whiteSpace: "pre-wrap", fontFamily: "inherit",
+            }}>
+              {g2Report.insights}
+            </div>
           </div>
         )}
       </Panel>
+
     </div>
   )
 }
