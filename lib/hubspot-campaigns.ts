@@ -68,13 +68,16 @@ async function fetchAllDeals(body: Record<string, unknown>): Promise<HsDeal[]> {
   return all
 }
 
-// Fetch all Tricky pipeline deals where lead_source = 'Q2 2026 MQL'
+const Q2_START_MS = new Date("2026-04-01").getTime().toString()
+
+// Fetch all Tricky pipeline EMEA deals created in Q2 2026
 export async function fetchTrickyDeals(): Promise<{ deals: HsDeal[]; total: number }> {
   const body = {
     filterGroups: [{
       filters: [
-        { propertyName: "pipeline",    operator: "EQ", value: "867371640" },
-        { propertyName: "lead_source", operator: "EQ", value: "Q2 2026 MQL" },
+        { propertyName: "pipeline",   operator: "EQ",             value: "867371640" },
+        { propertyName: "createdate", operator: "GTE",            value: Q2_START_MS },
+        { propertyName: "dealname",   operator: "CONTAINS_TOKEN", value: "EMEA"      },
       ],
     }],
     properties: ["dealname", "dealstage", "createdate"],
@@ -199,4 +202,7 @@ export interface AttributionResponse {
     totalInboundDeals: number
     skippedDeals: number
   }
+  ncReplied:      { company: string; email: string }[]
+  cuReplied:      { company: string; email: string }[]
+  inboundReplied: { company: string; email: string }[]
 }

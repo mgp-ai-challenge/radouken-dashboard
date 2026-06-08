@@ -25,11 +25,21 @@ export async function POST(req: Request) {
     const cuLeads      = await fetchAllLeads(cuId)
     const inboundLeads = await fetchAllLeads(inboundId)
 
+    // ── Compute replied leads per campaign ─────────────────────────────────
+    const ncReplied      = ncLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? l.email, email: l.email }))
+    const cuReplied      = cuLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? l.email, email: l.email }))
+    const inboundReplied = inboundLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? l.email, email: l.email }))
+
     // ── Step 2: Fetch HubSpot deals (parallel) ────────────────────────────
     const [{ deals: trickyDeals, total: totalTrickyDeals }, inboundDeals] = await Promise.all([
       fetchTrickyDeals(),
       fetchInboundDeals(),
     ])
+
+    console.log("[attribution] trickyDeals:", trickyDeals.length, "sample:", JSON.stringify(trickyDeals.slice(0, 2)))
+    console.log("[attribution] inboundDeals:", inboundDeals.length, "sample:", JSON.stringify(inboundDeals.slice(0, 2)))
+    console.log("[attribution] ncLeads sample companies:", ncLeads.slice(0, 5).map(l => l.companyName))
+    console.log("[attribution] inboundLeads sample emails:", inboundLeads.slice(0, 5).map(l => l.email))
 
     // ── Step 3: MQL attribution (Tricky campaigns) ────────────────────────
     const ncAttrib  = matchTrickyDeals(ncLeads,  trickyDeals)
@@ -69,6 +79,9 @@ export async function POST(req: Request) {
         totalInboundDeals: inboundDeals.length,
         skippedDeals,
       },
+      ncReplied,
+      cuReplied,
+      inboundReplied,
     })
   } catch (err) {
     console.error("[campaigns/attribution]", err)
