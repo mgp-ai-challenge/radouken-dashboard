@@ -294,10 +294,17 @@ function ComparisonChart({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
 
 // ─── Lead Status breakdown panel ──────────────────────────────────────────────
 type Bucket = { key: keyof CampaignStats; label: string; color: string; dimColor: string }
-const BUCKETS: Bucket[] = [
+const NC_CU_BUCKETS: Bucket[] = [
   { key: "nbActive",        label: "Active",     color: "campaignColor", dimColor: "campaignDim" },
   { key: "nbCompleted",     label: "Completed",  color: C.accent,        dimColor: C.accentDim   },
   { key: "nbReplied",       label: "Replied",    color: C.amber,         dimColor: C.amberDim    },
+  { key: "nbEmailsBounced", label: "Bounced",    color: C.red,           dimColor: C.redDim      },
+  { key: "nbUnsubscribed",  label: "Unsub",      color: C.slate,         dimColor: C.slateDim    },
+]
+const INBOUND_BUCKETS: Bucket[] = [
+  { key: "nbActive",        label: "Active",     color: "campaignColor", dimColor: "campaignDim" },
+  { key: "nbCompleted",     label: "Completed",  color: C.accent,        dimColor: C.accentDim   },
+  { key: "nbEmailsClicked", label: "Clicked",    color: C.amber,         dimColor: C.amberDim    },
   { key: "nbEmailsBounced", label: "Bounced",    color: C.red,           dimColor: C.redDim      },
   { key: "nbUnsubscribed",  label: "Unsub",      color: C.slate,         dimColor: C.slateDim    },
 ]
@@ -326,7 +333,7 @@ function LeadStatusPanel({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
               {c.label}
             </p>
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-              {BUCKETS.map((b) => {
+              {(c.key === "inbound" ? INBOUND_BUCKETS : NC_CU_BUCKETS).map((b) => {
                 const count    = (c.stats[b.key] as number) ?? 0
                 const color    = b.color    === "campaignColor" ? c.color : b.color
                 const dimColor = b.dimColor === "campaignDim"   ? `${c.color}1f` : b.dimColor
