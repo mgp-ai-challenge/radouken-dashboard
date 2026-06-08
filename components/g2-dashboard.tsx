@@ -21,7 +21,7 @@ import {
   ResponsiveContainer,
   LabelList,
 } from "recharts"
-import type { G2Review, G2Product, G2ProfileView, G2Rank, G2Campaign, G2IntentCompany } from "@/lib/g2"
+import type { G2Review, G2Product, G2ProfileView, G2Rank, G2Campaign, G2IntentCompany, DimensionTrend } from "@/lib/g2"
 import type { G2WeeklyReport } from "@/lib/g2-weekly-report"
 import type { AppEnrichment } from "@/lib/sensortower"
 
@@ -184,7 +184,7 @@ function KpiCard({
 }
 
 // ─── Data types for this dashboard ────────────────────────────────────────────
-type ReviewsData  = { product: Pick<G2Product, "starRating" | "reviewsCount">; reviews: G2Review[] }
+type ReviewsData  = { product: Pick<G2Product, "starRating" | "reviewsCount">; reviews: G2Review[]; dimensionTrends: DimensionTrend[] }
 type ProfileData  = { rank: G2Rank; weeklyViews: G2ProfileView[]; totalViewsThisMonth: number; totalViewsLastMonth: number }
 type CampaignsData = { campaigns: G2Campaign[] }
 type IntentData   = { companies: G2IntentCompany[]; totalThisMonth: number; totalThisWeek: number; hubspotPortalId: string }
@@ -260,6 +260,27 @@ function fmtWeek(iso: string): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
+// ─── ICP fit scoring ──────────────────────────────────────────────────────────
+function computeFit(co: G2IntentCompany, enrichment: AppEnrichment | undefined): { score: number; tier: "Hot" | "High" | "Medium" | "Low" } {
+  let score = 0
+  if (co.activityLevel === "high")        score += 40
+  else if (co.activityLevel === "medium") score += 25
+  else if (co.activityLevel === "low")    score += 10
+  if (co.buyingStage === "decision")           score += 25
+  else if (co.buyingStage === "consideration") score += 15
+  else if (co.buyingStage === "awareness")     score += 5
+  const ls = co.lifecycleStage?.toLowerCase() ?? ""
+  if      (ls === "opportunity")              score += 20
+  else if (ls === "salesqualifiedlead")       score += 15
+  else if (ls === "marketingqualifiedlead")   score += 10
+  else if (ls === "lead" || ls === "subscriber") score += 5
+  if (enrichment?.hasApp === true)            score += 10
+  if (co.relatedProducts.length > 0 || co.productName) score += 5
+  const tier: "Hot" | "High" | "Medium" | "Low" =
+    score >= 76 ? "Hot" : score >= 56 ? "High" : score >= 31 ? "Medium" : "Low"
+  return { score, tier }
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export function G2Dashboard() {
   const [reviews,   setReviews]   = useState<ReviewsData | null>(null)
@@ -279,6 +300,8 @@ export function G2Dashboard() {
   const [filterScore,     setFilterScore]     = useState<number>(0)
   const [filterLifecycle, setFilterLifecycle] = useState<string>("all")
   const [filterApp,       setFilterApp]       = useState<string>("all")
+  const [filterRelatedProduct, setFilterRelatedProduct] = useState<string>("all")
+  const [filterFit,            setFilterFit]            = useState<string>("all")
 
   const [g2Report,           setG2Report]           = useState<G2WeeklyReport | null>(null)
   const [g2ReportLoading,    setG2ReportLoading]    = useState(true)
@@ -293,9 +316,38 @@ export function G2Dashboard() {
       if (filterLifecycle !== "all" && (co.lifecycleStage?.toLowerCase() ?? "") !== filterLifecycle) return false
       if (filterApp === "yes" && !appEnrichments.get(co.id)?.hasApp) return false
       if (filterApp === "no"  && appEnrichments.get(co.id)?.hasApp)  return false
+      if (filterRelatedProduct !== "all") {
+        if (co.productName !== filterRelatedProduct && !co.relatedProducts.includes(filterRelatedProduct)) return false
+      }
+      if (filterFit !== "all") {
+        if (computeFit(co, appEnrichments.get(co.id)).tier !== filterFit) return false
+      }
       return true
     })
-  }, [intent, filterStage, filterScore, filterLifecycle, filterApp, appEnrichments])
+  }, [intent, filterStage, filterScore, filterLifecycle, filterApp, appEnrichments, filterRelatedProduct, filterFit])
+
+  // Competitor tally — derived from ALL intent companies (not filtered), top 8
+  const competitorTally = useMemo(() => {
+    if (!intent) return []
+    const tally = new Map<string, { total: number; byStage: Record<string, number> }>()
+    for (const co of intent.companies) {
+      const products = new Set([
+        ...(co.productName ? [co.productName] : []),
+        ...co.relatedProducts,
+      ])
+      for (const name of products) {
+        const entry = tally.get(name) ?? { total: 0, byStage: {} }
+        entry.total++
+        const stage = co.buyingStage ?? "unknown"
+        entry.byStage[stage] = (entry.byStage[stage] ?? 0) + 1
+        tally.set(name, entry)
+      }
+    }
+    return [...tally.entries()]
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 8)
+      .map(([name, data]) => ({ name, ...data }))
+  }, [intent])
 
   const [syncing, setSyncing] = useState(false)
   const [lastSynced, setLastSynced] = useState<Date | null>(null)
@@ -564,7 +616,7 @@ export function G2Dashboard() {
             : s === "marketingqualifiedlead" ? "MQL"
             : s.charAt(0).toUpperCase() + s.slice(1)
 
-          const hasActiveFilter = filterStage !== "all" || filterScore > 0 || filterLifecycle !== "all" || filterApp !== "all"
+          const hasActiveFilter = filterStage !== "all" || filterScore > 0 || filterLifecycle !== "all" || filterApp !== "all" || filterRelatedProduct !== "all" || filterFit !== "all"
 
           return (
             <div style={{
@@ -613,9 +665,36 @@ export function G2Dashboard() {
                 active={filterApp}
                 onSelect={setFilterApp}
               />
+              <div style={{ width: "1px", height: "18px", background: C.border }} />
+              <FilterPills
+                label="Fit"
+                options={[
+                  { value: "all",    display: "All"    },
+                  { value: "Hot",    display: "Hot"    },
+                  { value: "High",   display: "High"   },
+                  { value: "Medium", display: "Medium" },
+                  { value: "Low",    display: "Low"    },
+                ]}
+                active={filterFit}
+                onSelect={setFilterFit}
+              />
+              {competitorTally.length > 0 && (
+                <>
+                  <div style={{ width: "1px", height: "18px", background: C.border }} />
+                  <FilterPills
+                    label="Competitor"
+                    options={[
+                      { value: "all", display: "All" },
+                      ...competitorTally.slice(0, 5).map(({ name }) => ({ value: name, display: name })),
+                    ]}
+                    active={filterRelatedProduct}
+                    onSelect={setFilterRelatedProduct}
+                  />
+                </>
+              )}
               {hasActiveFilter && (
                 <button
-                  onClick={() => { setFilterStage("all"); setFilterScore(0); setFilterLifecycle("all"); setFilterApp("all") }}
+                  onClick={() => { setFilterStage("all"); setFilterScore(0); setFilterLifecycle("all"); setFilterApp("all"); setFilterRelatedProduct("all"); setFilterFit("all") }}
                   style={{ marginLeft: "auto", fontSize: "11px", color: C.muted, background: "transparent", border: "none", cursor: "pointer", padding: "2px 4px" }}
                 >
                   Clear filters ×
@@ -637,60 +716,43 @@ export function G2Dashboard() {
           </p>
         ) : (
           <>
-          {/* ── Intelligence summary bar ─────────────────────────────── */}
-          {(() => {
-            const productTally = new Map<string, number>()
-            for (const co of filteredCompanies) {
-              if (co.productName) productTally.set(co.productName, (productTally.get(co.productName) ?? 0) + 1)
-              for (const p of co.relatedProducts) productTally.set(p, (productTally.get(p) ?? 0) + 1)
-            }
-            const topProducts = [...productTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
-
-            const industryTally = new Map<string, number>()
-            for (const co of filteredCompanies) {
-              if (co.industry) industryTally.set(co.industry, (industryTally.get(co.industry) ?? 0) + 1)
-            }
-            const topIndustries = [...industryTally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
-
-            if (topProducts.length === 0 && topIndustries.length === 0) return null
-            return (
-              <div style={{
-                display: "flex", flexWrap: "wrap", gap: "16px", alignItems: "center",
-                background: C.cardAlt, border: `1px solid ${C.border}`,
-                borderRadius: "10px", padding: "10px 14px", marginBottom: "16px",
-                fontSize: "11px",
-              }}>
-                {topProducts.length > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <span style={{ color: C.muted, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "10px" }}>Top researched</span>
-                    {topProducts.map(([name, count]) => (
-                      <span key={name} style={{ padding: "2px 8px", borderRadius: "999px", background: C.amberDim, color: C.amber, fontWeight: 600 }}>
-                        {name} × {count}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {topProducts.length > 0 && topIndustries.length > 0 && (
-                  <div style={{ width: "1px", height: "18px", background: C.border, flexShrink: 0 }} />
-                )}
-                {topIndustries.length > 0 && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <span style={{ color: C.muted, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", fontSize: "10px" }}>Industries</span>
-                    {topIndustries.map(([name, count]) => (
-                      <span key={name} style={{ padding: "2px 8px", borderRadius: "999px", background: "rgba(76,158,245,0.10)", color: C.blue, fontWeight: 600 }}>
-                        {name} × {count}
-                      </span>
-                    ))}
-                  </div>
-                )}
+          {/* ── Competitor Tally Panel ──────────────────────────────── */}
+          {competitorTally.length > 0 && (
+            <div style={{
+              background: C.cardAlt, border: `1px solid ${C.border}`,
+              borderRadius: "10px", padding: "14px 16px", marginBottom: "16px",
+            }}>
+              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "12px" }}>
+                Competitors Being Evaluated
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {competitorTally.map(({ name, total, byStage }) => (
+                  <button
+                    key={name}
+                    onClick={() => setFilterRelatedProduct(filterRelatedProduct === name ? "all" : name)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "6px",
+                      padding: "5px 10px", borderRadius: "8px",
+                      border: `1px solid ${filterRelatedProduct === name ? C.borderAccent : C.border}`,
+                      background: filterRelatedProduct === name ? C.accentDim : "transparent",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span style={{ fontSize: "11px", fontWeight: 600, color: C.sageLight }}>{name}</span>
+                    <span style={{ fontSize: "10px", fontWeight: 700, color: C.accent }}>{total}</span>
+                    {(byStage.awareness    ?? 0) > 0 && <span style={{ padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 600, background: "rgba(124,140,148,0.15)", color: C.slate }}>{byStage.awareness}</span>}
+                    {(byStage.consideration ?? 0) > 0 && <span style={{ padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 600, background: "rgba(76,158,245,0.12)", color: C.blue }}>{byStage.consideration}</span>}
+                    {(byStage.decision      ?? 0) > 0 && <span style={{ padding: "1px 5px", borderRadius: "4px", fontSize: "9px", fontWeight: 600, background: C.accentDim, color: C.accent }}>{byStage.decision}</span>}
+                  </button>
+                ))}
               </div>
-            )
-          })()}
+            </div>
+          )}
           <div style={{ overflowX: "auto" }}>
             <table aria-label="G2 Buyer Intent Companies" style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
                 <tr>
-                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal", "In HubSpot", "Lifecycle", "Products", "App"].map((col) => (
+                  {["Company", "Activity", "Stage", "Intent Score", "Last Signal", "In HubSpot", "Lifecycle", "Fit", "Products", "App"].map((col) => (
                     <th key={col} scope="col" style={{ textAlign: col === "Company" ? "left" : "center", padding: "6px 10px", color: C.muted, fontWeight: 600, fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: `1px solid ${C.border}` }}>
                       {col}
                     </th>
@@ -699,7 +761,7 @@ export function G2Dashboard() {
               </thead>
               <tbody>
                 {filteredCompanies.length === 0 ? (
-                  <tr><td colSpan={9} style={{ padding: "32px 0", textAlign: "center", color: C.muted, fontSize: "12px" }}>No companies match the current filters.</td></tr>
+                  <tr><td colSpan={10} style={{ padding: "32px 0", textAlign: "center", color: C.muted, fontSize: "12px" }}>No companies match the current filters.</td></tr>
                 ) : filteredCompanies.map((co, i) => {
                   const activityColor = co.activityLevel === "high" ? C.accent : co.activityLevel === "medium" ? C.amber : C.slate
                   const activityBg   = co.activityLevel === "high" ? C.accentDim : co.activityLevel === "medium" ? C.amberDim : "rgba(124,140,148,0.10)"
@@ -784,6 +846,18 @@ export function G2Dashboard() {
                             )
                           })() : <span style={{ color: C.muted }}>—</span>}
                         </td>
+                        <td style={{ padding: "10px 10px", textAlign: "center" }}>
+                          {(() => {
+                            const { tier } = computeFit(co, appEnrichments.get(co.id))
+                            const color = tier === "Hot" ? C.accent : tier === "High" ? C.amber : tier === "Medium" ? C.blue : C.slate
+                            const bg    = tier === "Hot" ? C.accentDim : tier === "High" ? C.amberDim : tier === "Medium" ? "rgba(76,158,245,0.12)" : "rgba(124,140,148,0.10)"
+                            return (
+                              <span style={{ padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: bg, color }}>
+                                {tier}
+                              </span>
+                            )
+                          })()}
+                        </td>
                         <td style={{ padding: "10px 10px", textAlign: "center", maxWidth: "160px" }}>
                           {(() => {
                             const all = [
@@ -815,7 +889,7 @@ export function G2Dashboard() {
                       </tr>
                       {expandedRow === co.id && (
                         <tr style={{ borderBottom: i < filteredCompanies.length - 1 ? `1px solid ${C.border}` : "none", background: C.cardAlt }}>
-                          <td colSpan={9} style={{ padding: "0 10px 14px 10px" }}>
+                          <td colSpan={10} style={{ padding: "0 10px 14px 10px" }}>
                             <div style={{ display: "flex", gap: "32px", flexWrap: "wrap", padding: "10px 0" }}>
                               {/* G2 Research section */}
                               {(co.relatedProducts.length > 0 || co.relatedProductDetails) && (
