@@ -13,7 +13,7 @@ export interface G2WeeklyReport {
     qualifiedLastWeek: number
     newThisWeek: number
     escalatedCount: number
-    hotCount: number
+    hotCount?: number
   }
   insights: string
 }
