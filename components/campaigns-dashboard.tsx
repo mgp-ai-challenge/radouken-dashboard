@@ -105,7 +105,9 @@ function CampaignKpiCard({ campaign, totalLeads, leadCountsErr }: { campaign: Di
               ? <LoadingSkeleton h={32} />
               : <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em", marginBottom: "2px" }}>{totalLeads.toLocaleString()}</p>
           }
-          <p style={{ fontSize: "11px", color: C.muted, marginBottom: "6px" }}>leads in campaign</p>
+          {totalLeads !== null && (
+            <p style={{ fontSize: "11px", color: C.muted, marginBottom: "6px" }}>leads in campaign</p>
+          )}
           {totalLeads !== null && (s.nbCompleted > 0 || s.nbActive > 0) && (
             <p style={{ fontSize: "11px", color: C.muted, marginBottom: "6px" }}>
               <span style={{ color: C.sage }}>{s.nbCompleted.toLocaleString()} finished</span>
@@ -394,15 +396,10 @@ export function CampaignsDashboard() {
         setLastSynced(new Date())
         // Lead counts (~10s) then attribution (~5min) — sequential to respect rate limits
         loadLeadCounts(camps)
-          .then((counts) => {
-            if (syncGenRef.current !== gen) return
-            if (counts) setLeadCounts(counts)
-          })
-          .catch((err) => {
-            if (syncGenRef.current !== gen) return
-            console.error("[campaigns/lead-counts]", err)
-            setLeadCountsErr(String(err))
-          })
+          .then(
+            (counts) => { if (syncGenRef.current !== gen) return; if (counts) setLeadCounts(counts) },
+            (err)    => { if (syncGenRef.current !== gen) return; console.error("[campaigns/lead-counts]", err); setLeadCountsErr(String(err)) },
+          )
           .then(() => { if (syncGenRef.current !== gen) return; return new Promise<void>((r) => setTimeout(r, 500)) })
           .then(() => { if (syncGenRef.current !== gen) return; return loadAttribution(camps) })
           .catch((err) => {
@@ -495,7 +492,11 @@ export function CampaignsDashboard() {
         />
       )}
       {inbound && (
-        <StatsTable campaign={inbound} />
+        <StatsTable
+          campaign={inbound}
+          totalLeads={leadCounts?.inbound}
+          sentCount={attrib?.sentCounts.inbound}
+        />
       )}
 
       {/* ── Comparison chart ────────────────────────────────────────────────── */}
