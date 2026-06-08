@@ -8,6 +8,12 @@ export interface G2Review {
   companySize: string
   body: string            // "What do you like best?" excerpt
   createdAt: string       // ISO date
+  easeOfUse: number | null
+  qualityOfSupport: number | null
+  easeOfSetup: number | null
+  meetsRequirements: number | null
+  likelihoodToRecommend: number | null
+  easeOfDoingBusiness: number | null
 }
 
 export interface G2Product {
@@ -25,7 +31,9 @@ export interface G2ProfileView {
 export interface G2Rank {
   category: string
   rank: number
-  rankChange: number      // positive = rank number decreased = improved; negative = dropped
+  rankChange: number
+  productScores: { easeOfUse: number; qualityOfSupport: number; easeOfSetup: number }
+  categoryScores: { easeOfUse: number; qualityOfSupport: number; easeOfSetup: number }
 }
 
 export interface G2Campaign {
@@ -38,6 +46,15 @@ export interface G2Campaign {
   status: "active" | "paused" | "ended"
 }
 
+export interface DimensionTrend {
+  dimension: string       // display label, e.g. "Ease of Use"
+  key: string             // camelCase field name matching G2Review
+  current: number         // avg score, last 3 months (0 if < 3 reviews)
+  previous: number        // avg score, months 4–6 ago (0 if < 3 reviews)
+  delta: number           // percentage change, rounded to 1 decimal
+  direction: "up" | "down" | "flat"
+}
+
 export interface G2IntentCompany {
   id: string
   name: string
@@ -48,6 +65,11 @@ export interface G2IntentCompany {
   intentDetails: string | null
   lastSignalAt: string    // ISO date
   lifecycleStage: string | null
+  industry: string | null
+  productName: string | null
+  signalsPage: string | null
+  relatedProducts: string[]
+  relatedProductDetails: string | null
 }
 
 const G2_BASE = "https://data.g2.com/api/v1"
@@ -77,24 +99,30 @@ export async function getG2Product(): Promise<G2Product> {
     throw new Error("G2: no product found")
   }
   const item = data.data[0]
-  return {
+  const product = {
     id: item.id,
     name: String(item.attributes.name ?? ""),
     starRating: Number(item.attributes.star_rating ?? 0),
     reviewsCount: Number(item.attributes.review_count ?? 0),
   }
+  return product
 }
 
 // ─── Reviews ──────────────────────────────────────────────────────────────────
 
 export async function getG2Reviews(productId: string): Promise<G2Review[]> {
   const data = await g2Fetch(
-    `/products/${encodeURIComponent(productId)}/survey-responses?page[size]=10&sort=-submitted_at`
+    `/products/${encodeURIComponent(productId)}/survey-responses?page[size]=100&sort=-submitted_at`
   ) as { data: Array<{ id: string; attributes: Record<string, unknown> }> }
   return (data.data ?? []).map((item) => {
     const attrs = item.attributes
     const commentAnswers = attrs.comment_answers as Record<string, { value?: string }> | null
     const body = commentAnswers?.love?.value ?? String(attrs.body ?? "")
+    const numOrNull = (v: unknown): number | null => {
+      if (v === null || v === undefined || v === "") return null
+      const n = Number(v)
+      return isNaN(n) ? null : n
+    }
     return {
       id: item.id,
       title: String(attrs.title ?? ""),
@@ -103,6 +131,12 @@ export async function getG2Reviews(productId: string): Promise<G2Review[]> {
       companySize: String(attrs.country_name ?? ""),
       body,
       createdAt: String(attrs.submitted_at ?? ""),
+      easeOfUse:            numOrNull(attrs.ease_of_use),
+      qualityOfSupport:     numOrNull(attrs.quality_of_support),
+      easeOfSetup:          numOrNull(attrs.ease_of_setup),
+      meetsRequirements:    numOrNull(attrs.meets_requirements),
+      likelihoodToRecommend: numOrNull(attrs.likelihood_to_recommend),
+      easeOfDoingBusiness:  numOrNull(attrs.ease_of_doing_business_with),
     }
   })
 }
@@ -118,7 +152,8 @@ export async function getG2ProfileViews(productId: string): Promise<G2ProfileVie
       week: String(item.attributes.period_start ?? item.attributes.date ?? ""),
       views: Number(item.attributes.views ?? item.attributes.count ?? 0),
     }))
-  } catch {
+  } catch (err) {
+    console.error("[g2] getG2ProfileViews failed:", err)
     return []
   }
 }
@@ -131,12 +166,17 @@ export async function getG2Rank(productId: string): Promise<G2Rank | null> {
       data: { id: string; attributes: Record<string, unknown> }
     }
     const attrs = data.data?.attributes ?? {}
+    const prod = (attrs.product_averages ?? {}) as Record<string, number>
+    const cat  = (attrs.category_averages ?? {}) as Record<string, number>
     return {
-      category: String(attrs.category_name ?? ""),
-      rank: 0,
+      category:   String(attrs.category_name ?? ""),
+      rank:       0,
       rankChange: 0,
+      productScores:  { easeOfUse: prod.ease_of_use ?? 0, qualityOfSupport: prod.quality_of_support ?? 0, easeOfSetup: prod.ease_of_setup ?? 0 },
+      categoryScores: { easeOfUse: cat.ease_of_use  ?? 0, qualityOfSupport: cat.quality_of_support  ?? 0, easeOfSetup: cat.ease_of_setup  ?? 0 },
     }
-  } catch {
+  } catch (err) {
+    console.error("[g2] getG2Rank failed:", err)
     return null
   }
 }
@@ -162,7 +202,8 @@ export async function getG2Campaigns(productId: string): Promise<G2Campaign[]> {
           : "ended") as G2Campaign["status"],
       }
     })
-  } catch {
+  } catch (err) {
+    console.error("[g2] getG2Campaigns failed:", err)
     return []
   }
 }
