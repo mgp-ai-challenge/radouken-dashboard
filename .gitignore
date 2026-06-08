@@ -33,6 +33,7 @@ pnpm-debug.log*
 
 # generated files
 .bug-issues.json
+.g2-weekly-report.json
 
 # typescript
 *.tsbuildinfo

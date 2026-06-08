@@ -342,6 +342,7 @@ export function G2Dashboard() {
     setProfileErr(false)
     setCampaignsErr(false)
     setIntentErr(false)
+    setG2ReportErr(null)
     setAppEnrichments(new Map())
     setSyncing(true)
     setG2ReportLoading(true)
