@@ -13,6 +13,7 @@ export interface G2WeeklyReport {
     qualifiedLastWeek: number
     newThisWeek: number
     escalatedCount: number
+    hotCount: number
   }
   insights: string
 }
@@ -140,6 +141,23 @@ function topProducts(companies: IntentCompany[], n = 5): string[] {
     .map(([name, count]) => `${name} × ${count}`)
 }
 
+function fitScore(co: IntentCompany): number {
+  let score = 0
+  if (co.activityLevel === "high")        score += 40
+  else if (co.activityLevel === "medium") score += 25
+  else if (co.activityLevel === "low")    score += 10
+  if (co.buyingStage === "decision")           score += 25
+  else if (co.buyingStage === "consideration") score += 15
+  else if (co.buyingStage === "awareness")     score += 5
+  const ls = co.lifecycleStage?.toLowerCase() ?? ""
+  if      (ls === "opportunity")              score += 20
+  else if (ls === "salesqualifiedlead")       score += 15
+  else if (ls === "marketingqualifiedlead")   score += 10
+  else if (ls === "lead" || ls === "subscriber") score += 5
+  if (co.relatedProducts.length > 0 || co.productName) score += 5
+  return score
+}
+
 async function generateInsights(
   thisWeek: IntentCompany[],
   lastWeek: IntentCompany[],
@@ -251,7 +269,7 @@ function formatTelegramMessage(report: G2WeeklyReport): string {
     `📊 *G2 Intent Report — ${report.weekLabel}*`,
     ``,
     `Qualified signals: ${report.kpis.qualifiedThisWeek} this week (was ${report.kpis.qualifiedLastWeek}, ${wowDelta >= 0 ? "+" : ""}${wowDelta} WoW)`,
-    `New companies: ${report.kpis.newThisWeek} | Escalations: ${report.kpis.escalatedCount}`,
+    `New companies: ${report.kpis.newThisWeek} | Escalations: ${report.kpis.escalatedCount} | 🔥 Hot: ${report.kpis.hotCount}`,
     ``,
     report.insights,
   ].join("\n")
@@ -276,6 +294,8 @@ export async function generateG2WeeklyReport(): Promise<G2WeeklyReport> {
     .map((curr) => ({ prev: lastWeekMap.get(curr.id)!, curr }))
     .filter(({ prev, curr }) => didEscalate(prev, curr))
 
+  const hotCount = thisWeek.filter((co) => fitScore(co) >= 76).length
+
   const insights = await generateInsights(thisWeek, lastWeek, newEntrants, escalated)
 
   const report: G2WeeklyReport = {
@@ -286,6 +306,7 @@ export async function generateG2WeeklyReport(): Promise<G2WeeklyReport> {
       qualifiedLastWeek: lastWeek.length,
       newThisWeek: newEntrants.length,
       escalatedCount: escalated.length,
+      hotCount,
     },
     insights,
   }
