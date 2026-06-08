@@ -337,6 +337,7 @@ export function G2Dashboard() {
     setProfile(null)
     setCampaigns(null)
     setIntent(null)
+    setG2Report(null)
     setReviewsErr(false)
     setProfileErr(false)
     setCampaignsErr(false)
@@ -350,7 +351,11 @@ export function G2Dashboard() {
       fetch("/api/g2/profile").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch("/api/g2/campaigns").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
       fetch(`/api/g2/intent?days=${intentDaysRef.current}`).then((r) => r.ok ? r.json() : Promise.reject(r.status)),
-      fetch("/api/g2/weekly-report").then((r) => r.ok ? r.json() : Promise.reject(r.status)),
+      fetch("/api/g2/weekly-report").then((r) => {
+        if (r.status === 404) return null
+        if (!r.ok) return Promise.reject(r.status)
+        return r.json()
+      }),
     ]).then(([r, p, c, i, wr]) => {
       if (r.status === "fulfilled") setReviews(r.value as ReviewsData); else setReviewsErr(true)
       if (p.status === "fulfilled") setProfile(p.value as ProfileData); else setProfileErr(true)
@@ -381,6 +386,8 @@ export function G2Dashboard() {
       }
       if (wr.status === "fulfilled") {
         setG2Report(wr.value as G2WeeklyReport | null)
+      } else {
+        setG2ReportErr("Failed to load report")
       }
       setG2ReportLoading(false)
       setLastSynced(new Date())
@@ -1037,21 +1044,21 @@ export function G2Dashboard() {
                   const report = await res.json() as G2WeeklyReport
                   setG2Report(report)
                 } catch (e) {
-                  setG2ReportErr(String(e))
+                  setG2ReportErr(e instanceof Error ? e.message : String(e))
                 } finally {
                   setG2ReportGenerating(false)
                 }
               }}
-              disabled={g2ReportGenerating}
+              disabled={g2ReportGenerating || g2ReportLoading}
               style={{
                 display: "flex", alignItems: "center", gap: "6px",
                 background: "transparent",
                 border: `1px solid ${C.borderAccent}`,
                 borderRadius: "8px",
                 padding: "7px 14px",
-                color: g2ReportGenerating ? C.muted : C.accent,
+                color: (g2ReportGenerating || g2ReportLoading) ? C.muted : C.accent,
                 fontSize: "12px", fontWeight: 600,
-                cursor: g2ReportGenerating ? "not-allowed" : "pointer",
+                cursor: (g2ReportGenerating || g2ReportLoading) ? "not-allowed" : "pointer",
               }}
             >
               <RefreshCw size={12} strokeWidth={2.5} style={{ animation: g2ReportGenerating ? "g2-spin 1s linear infinite" : "none" }} />
