@@ -217,7 +217,7 @@ function StatsTable({
           </thead>
           <tbody>
             <StatRow label="Leads in campaign"  count={totalLeads ?? sentCount ?? 0}         />
-            <StatRow label="Leads reached"       count={reached}           rate={pct(reached, sentCount ?? 0)}          />
+            <StatRow label="Leads reached"       count={reached}           rate={pct(reached, sentCount ?? s.nbEmailsSent)}          />
             <StatRow label="Messages sent"       count={s.nbEmailsSent}    note="Multi-step sequence"              />
             <StatRow label="Opened"              count={s.nbEmailsOpened}  rate={pct(s.nbEmailsOpened, reached)}   />
             <StatRow label="Clicked"             count={s.nbEmailsClicked} rate={pct(s.nbEmailsClicked, reached)}  />
@@ -304,7 +304,7 @@ const BUCKETS: Bucket[] = [
 
 function LeadStatusPanel({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
   const ready = campaigns.filter((c): c is DiscoveredCampaign & { stats: CampaignStats } => c.stats !== null)
-  if (campaigns.length > 0 && ready.length === 0) {
+  if (ready.length === 0) {
     return (
       <Panel style={{ marginBottom: "24px" }}>
         <SectionLabel>Lead Status Breakdown</SectionLabel>
@@ -312,7 +312,6 @@ function LeadStatusPanel({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
       </Panel>
     )
   }
-  if (ready.length === 0) return null
 
   return (
     <Panel style={{ marginBottom: "24px" }}>

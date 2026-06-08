@@ -26,9 +26,9 @@ export async function POST(req: Request) {
     const inboundLeads = await fetchAllLeads(inboundId)
 
     // ── Compute replied leads per campaign ─────────────────────────────────
-    const ncReplied      = ncLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? l.email, email: l.email }))
-    const cuReplied      = cuLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? l.email, email: l.email }))
-    const inboundReplied = inboundLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? l.email, email: l.email }))
+    const ncReplied      = ncLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? (l.email.split("@")[1] ?? l.email), email: l.email }))
+    const cuReplied      = cuLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? (l.email.split("@")[1] ?? l.email), email: l.email }))
+    const inboundReplied = inboundLeads.filter((l) => l.hasResponded).map((l) => ({ company: l.companyName ?? (l.email.split("@")[1] ?? l.email), email: l.email }))
 
     // ── Step 2: Fetch HubSpot deals (parallel) ────────────────────────────
     const [{ deals: trickyDeals, total: totalTrickyDeals }, inboundDeals] = await Promise.all([
