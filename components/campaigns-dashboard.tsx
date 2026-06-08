@@ -8,6 +8,7 @@ import {
 } from "recharts"
 import type { DiscoveredCampaign, CampaignStats } from "@/lib/lemlist"
 import type { AttributionResponse, TrickyAttribution } from "@/lib/hubspot-campaigns"
+import type { CampaignWeeklyReport } from "@/lib/campaigns-weekly-report"
 
 // ─── Design system (matches g2-dashboard.tsx) ────────────────────────────────
 const C = {
@@ -441,6 +442,72 @@ function RepliedPanel({
   )
 }
 
+// ─── Weekly Campaigns Report panel ────────────────────────────────────────────
+function CampaignWeeklyReportPanel({
+  report, generating, error, onGenerate,
+}: {
+  report: CampaignWeeklyReport | null
+  generating: boolean
+  error: string | null
+  onGenerate: () => void
+}) {
+  const totalMqls = report ? report.kpis.nc.mqls + report.kpis.cu.mqls : 0
+  const totalSqls = report ? report.kpis.nc.sqls + report.kpis.cu.sqls : 0
+
+  return (
+    <Panel style={{ marginTop: "24px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+        <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0 }}>
+          Weekly Campaigns Report
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {report && (
+            <span style={{ fontSize: "11px", color: C.muted }}>
+              {report.weekLabel}
+            </span>
+          )}
+          <button
+            onClick={onGenerate}
+            disabled={generating}
+            style={{ display: "flex", alignItems: "center", gap: "6px", background: "transparent", border: `1px solid ${C.borderAccent}`, borderRadius: "8px", padding: "6px 12px", color: generating ? C.muted : C.accent, fontSize: "11px", fontWeight: 600, cursor: generating ? "not-allowed" : "pointer" }}
+          >
+            {generating ? "Generating… ~5 min" : "Generate Report"}
+          </button>
+        </div>
+      </div>
+
+      {error && <DataError message={error} />}
+
+      {!report && !generating && !error && (
+        <p style={{ fontSize: "12px", color: C.muted, fontStyle: "italic" }}>No report generated yet.</p>
+      )}
+
+      {generating && !report && <LoadingSkeleton h={160} />}
+
+      {report && (
+        <>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
+            {[
+              { label: `${report.repliedCompanies.nc.length} NC replied`,  bg: C.accentDim, color: C.accent },
+              { label: `${report.repliedCompanies.cu.length} CU replied`,  bg: C.accentDim, color: C.accent },
+              { label: `${totalMqls} MQLs`,                                bg: C.greenDim,  color: C.green  },
+              { label: `${totalSqls} SQLs`,                                bg: C.blueDim,   color: C.blue   },
+              { label: `${report.kpis.totalTrickyOpps} Tricky Opps`,       bg: C.accentDim, color: C.accent },
+            ].map((chip) => (
+              <span key={chip.label} style={{ padding: "3px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: chip.bg, color: chip.color }}>
+                {chip.label}
+              </span>
+            ))}
+          </div>
+          <div style={{ fontSize: "12px", color: C.sage, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>
+            {report.insights}
+          </div>
+        </>
+      )}
+    </Panel>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export function CampaignsDashboard() {
   const [campaigns,  setCampaigns]  = useState<DiscoveredCampaign[]>([])
@@ -453,6 +520,9 @@ export function CampaignsDashboard() {
   const [lastSynced, setLastSynced] = useState<Date | null>(null)
   const attribAbortRef = useRef<AbortController | null>(null)
   const syncGenRef     = useRef(0)
+  const [weeklyReport,    setWeeklyReport]    = useState<CampaignWeeklyReport | null>(null)
+  const [weeklyReportErr, setWeeklyReportErr] = useState<string | null>(null)
+  const [generating,      setGenerating]      = useState(false)
 
   const loadStats = useCallback(async () => {
     const res = await fetch("/api/campaigns/stats")
@@ -535,6 +605,26 @@ export function CampaignsDashboard() {
   // Initial load
   useEffect(() => { fetchAll() }, [fetchAll])
 
+  useEffect(() => {
+    fetch("/api/campaigns/weekly-report")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: CampaignWeeklyReport | null) => { if (data && data.generatedAt) setWeeklyReport(data) })
+      .catch(() => {})
+  }, [])
+
+  async function handleGenerate() {
+    setGenerating(true)
+    setWeeklyReportErr(null)
+    try {
+      const res = await fetch("/api/campaigns/weekly-report", { method: "POST" })
+      if (!res.ok) throw new Error(await res.text())
+      setWeeklyReport(await res.json())
+    } catch (e) {
+      setWeeklyReportErr(String(e))
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   const nc      = campaigns.find((c) => c.key === "nc")      ?? null
   const cu      = campaigns.find((c) => c.key === "cu")      ?? null
@@ -690,6 +780,14 @@ export function CampaignsDashboard() {
           </div>
         )}
       </Panel>
+
+      {/* ── Weekly Campaigns Report ──────────────────────────────────────────── */}
+      <CampaignWeeklyReportPanel
+        report={weeklyReport}
+        generating={generating}
+        error={weeklyReportErr}
+        onGenerate={handleGenerate}
+      />
     </div>
   )
 }
