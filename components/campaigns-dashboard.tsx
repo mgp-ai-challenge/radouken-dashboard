@@ -624,6 +624,13 @@ export function CampaignsDashboard() {
       {/* ── MQL Attribution panel ───────────────────────────────────────────── */}
       <Panel style={{ marginBottom: "24px" }}>
         <SectionLabel>MQL Attribution — Tricky Pipeline</SectionLabel>
+        {attrib && (
+          <p style={{ marginBottom: "16px" }}>
+            <span style={{ padding: "3px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: C.accentDim, color: C.accent }}>
+              {attrib.combined.totalTrickyDeals} Tricky Opps
+            </span>
+          </p>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
           <MqlColumn
             label="Non-Customers"
