@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/g2-weekly-report",
       "schedule": "0 9 * * 1"
+    },
+    {
+      "path": "/api/cron/campaigns-weekly-report",
+      "schedule": "0 10 * * 1"
     }
   ]
 }
