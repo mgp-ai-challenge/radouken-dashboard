@@ -26,7 +26,6 @@ export interface CampaignStats {
   nbActive: number      // leads currently in-sequence or ready
 }
 
-
 export interface LemlistLead {
   email: string
   companyName: string | null
@@ -80,7 +79,7 @@ function parseStats(data: Record<string, unknown>): CampaignStats {
   const completed = Number(data.leadCompleted ?? 0)
   const active    = Number(data.leadInProgress ?? 0) + Number(data.leadReadyToSend ?? 0) + Number(data.leadToLaunch ?? 0)
   return {
-    nbLeads:         0,  // filled in later by lead-counts route
+    nbLeads:         0,  // not in Lemlist stats API — KPI card uses leadCounts from /api/campaigns/lead-counts
     nbContacted:     delivered,
     nbEmailsSent:    sent,
     nbEmailsOpened:  opened,
@@ -95,7 +94,6 @@ function parseStats(data: Record<string, unknown>): CampaignStats {
     nbActive:        active,
   }
 }
-
 
 // Fetch stats for multiple campaigns sequentially (100ms delay, respects 10 req/s limit)
 export async function fetchAllCampaignStats(
