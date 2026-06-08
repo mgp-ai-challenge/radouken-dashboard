@@ -1206,6 +1206,11 @@ export function G2Dashboard() {
                   <p style={{ fontSize: "24px", fontWeight: 700, fontFamily: MONO, color: accent, lineHeight: 1 }}>{value}</p>
                 </div>
               ))}
+              {g2Report.kpis.hotCount !== undefined && (
+                <span style={{ padding: "3px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, background: C.accentDim, color: C.accent }}>
+                  🔥 {g2Report.kpis.hotCount} hot
+                </span>
+              )}
             </div>
             {/* Claude insights */}
             <div style={{
