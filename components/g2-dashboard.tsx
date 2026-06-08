@@ -1027,11 +1027,40 @@ export function G2Dashboard() {
                 </p>
                 <p style={{ fontSize: "11px", color: C.slate }}>{profile.rank.category || "—"}</p>
               </div>
-              {([
-                { label: "Ease of Use",    prod: profile.rank.productScores?.easeOfUse       ?? 0, cat: profile.rank.categoryScores?.easeOfUse       ?? 0 },
-                { label: "Support",        prod: profile.rank.productScores?.qualityOfSupport ?? 0, cat: profile.rank.categoryScores?.qualityOfSupport ?? 0 },
-                { label: "Ease of Setup",  prod: profile.rank.productScores?.easeOfSetup      ?? 0, cat: profile.rank.categoryScores?.easeOfSetup      ?? 0 },
-              ]).map(({ label, prod, cat }) => (
+              {reviews?.dimensionTrends && reviews.dimensionTrends.length > 0 ? (
+                reviews.dimensionTrends.map(({ dimension, key, current, direction, delta }) => (
+                  <div key={key}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+                      <span style={{ fontSize: "11px", color: C.slate }}>{dimension}</span>
+                      <span style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", fontFamily: MONO, color: C.sageLight, fontWeight: 600 }}>
+                        {current > 0 ? current.toFixed(1) : "—"}
+                        {current > 0 && direction !== "flat" && (
+                          <span style={{
+                            fontSize: "9px", fontWeight: 700, padding: "1px 4px", borderRadius: "4px",
+                            background: direction === "up" ? C.accentDim : C.redDim,
+                            color:      direction === "up" ? C.accent    : C.red,
+                          }}>
+                            {direction === "up" ? "↑" : "↓"} {Math.abs(delta).toFixed(1)}%
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {current > 0 && (
+                      <div style={{ height: "6px", borderRadius: "999px", background: C.border, overflow: "hidden" }}>
+                        <div style={{
+                          height: "100%", borderRadius: "999px",
+                          width: `${(current / 10) * 100}%`,
+                          background: `linear-gradient(90deg, ${C.accent}, ${C.accentBright})`,
+                        }} />
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : ([
+                { label: "Ease of Use",   prod: profile.rank.productScores?.easeOfUse       ?? 0, cat: profile.rank.categoryScores?.easeOfUse       ?? 0 },
+                { label: "Support",       prod: profile.rank.productScores?.qualityOfSupport ?? 0, cat: profile.rank.categoryScores?.qualityOfSupport ?? 0 },
+                { label: "Ease of Setup", prod: profile.rank.productScores?.easeOfSetup      ?? 0, cat: profile.rank.categoryScores?.easeOfSetup      ?? 0 },
+              ] as const).map(({ label, prod, cat }) => (
                 <div key={label}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
                     <span style={{ fontSize: "11px", color: C.slate }}>{label}</span>
@@ -1042,14 +1071,12 @@ export function G2Dashboard() {
                   </div>
                   {prod > 0 && (
                     <div style={{ position: "relative", height: "6px", borderRadius: "999px", background: C.border, overflow: "visible" }}>
-                      {/* category avg marker */}
                       {cat > 0 && (
                         <div style={{
                           position: "absolute", top: "-3px", bottom: "-3px", width: "2px",
                           left: `${(cat / 10) * 100}%`, background: C.muted, borderRadius: "1px",
                         }} />
                       )}
-                      {/* product bar */}
                       <div style={{
                         height: "100%", borderRadius: "999px",
                         width: `${(prod / 10) * 100}%`,
