@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, Cell,
 } from "recharts"
-import type { DiscoveredCampaign } from "@/lib/lemlist"
+import type { DiscoveredCampaign, CampaignStats } from "@/lib/lemlist"
 import type { AttributionResponse, TrickyAttribution } from "@/lib/hubspot-campaigns"
 
 // ─── Design system (matches g2-dashboard.tsx) ────────────────────────────────
@@ -23,6 +23,7 @@ const C = {
   sageLight:    "#e8f3ef",
   muted:        "#3d6b56",
   slate:        "#7c8c94",
+  slateDim:     "rgba(124,140,148,0.10)",
   amber:        "#f5a623",
   amberDim:     "rgba(245,166,35,0.12)",
   red:          "#ef4444",
@@ -292,8 +293,17 @@ function ComparisonChart({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
 }
 
 // ─── Lead Status breakdown panel ──────────────────────────────────────────────
+type Bucket = { key: keyof CampaignStats; label: string; color: string; dimColor: string }
+const BUCKETS: Bucket[] = [
+  { key: "nbActive",        label: "Active",     color: "campaignColor", dimColor: "campaignDim" },
+  { key: "nbCompleted",     label: "Completed",  color: C.accent,        dimColor: C.accentDim   },
+  { key: "nbReplied",       label: "Replied",    color: C.amber,         dimColor: C.amberDim    },
+  { key: "nbEmailsBounced", label: "Bounced",    color: C.red,           dimColor: C.redDim      },
+  { key: "nbUnsubscribed",  label: "Unsub",      color: C.slate,         dimColor: C.slateDim    },
+]
+
 function LeadStatusPanel({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
-  const ready = campaigns.filter((c) => c.stats)
+  const ready = campaigns.filter((c): c is DiscoveredCampaign & { stats: CampaignStats } => c.stats !== null)
   if (campaigns.length > 0 && ready.length === 0) {
     return (
       <Panel style={{ marginBottom: "24px" }}>
@@ -303,15 +313,6 @@ function LeadStatusPanel({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
     )
   }
   if (ready.length === 0) return null
-
-  type Bucket = { key: string; label: string; color: string; dimColor: string }
-  const BUCKETS: Bucket[] = [
-    { key: "nbActive",        label: "Active",     color: "campaignColor", dimColor: "campaignDim" },
-    { key: "nbCompleted",     label: "Completed",  color: C.accent,        dimColor: C.accentDim   },
-    { key: "nbReplied",       label: "Replied",    color: C.amber,         dimColor: C.amberDim    },
-    { key: "nbEmailsBounced", label: "Bounced",    color: C.red,           dimColor: C.redDim      },
-    { key: "nbUnsubscribed",  label: "Unsub",      color: C.slate,         dimColor: "rgba(124,140,148,0.10)" },
-  ]
 
   return (
     <Panel style={{ marginBottom: "24px" }}>
@@ -327,9 +328,9 @@ function LeadStatusPanel({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
             </p>
             <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
               {BUCKETS.map((b) => {
-                const count = ((c.stats as unknown as Record<string, number>)[b.key]) ?? 0
+                const count    = (c.stats[b.key] as number) ?? 0
                 const color    = b.color    === "campaignColor" ? c.color : b.color
-                const dimColor = b.dimColor === "campaignDim"  ? "rgba(55,138,221,0.12)" : b.dimColor
+                const dimColor = b.dimColor === "campaignDim"   ? `${c.color}1f` : b.dimColor
                 return (
                   <span key={b.key} style={{ padding: "4px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 600, background: dimColor, color }}>
                     {count.toLocaleString()} {b.label}
