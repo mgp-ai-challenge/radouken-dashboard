@@ -348,7 +348,7 @@ function LeadStatusPanel({ campaigns }: { campaigns: DiscoveredCampaign[] }) {
 // ─── MQL Attribution panel ────────────────────────────────────────────────────
 function CompanyChip({ company, type }: { company: string; type: "MQL" | "SQL" | "LOST" }) {
   const color = type === "MQL" ? C.green : type === "SQL" ? C.blue : C.slate
-  const bg    = type === "MQL" ? C.greenDim : type === "SQL" ? C.blueDim : "rgba(124,140,148,0.10)"
+  const bg    = type === "MQL" ? C.greenDim : type === "SQL" ? C.blueDim : C.slateDim
   return (
     <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: bg, color, margin: "2px" }}>
       {company}
@@ -376,6 +376,62 @@ function MqlColumn({
         {attrib.lost.map((d) => <CompanyChip key={d.dealId} company={d.company} type="LOST" />)}
       </div>
     </div>
+  )
+}
+
+// ─── Replied companies panel ───────────────────────────────────────────────────
+function RepliedPanel({
+  attrib,
+  attribErr,
+  campaigns,
+}: {
+  attrib: AttributionResponse | null
+  attribErr: string | null
+  campaigns: DiscoveredCampaign[]
+}) {
+  return (
+    <Panel style={{ marginBottom: "24px" }}>
+      <SectionLabel>Replied Companies</SectionLabel>
+      {!attrib && !attribErr ? (
+        <LoadingSkeleton h={100} />
+      ) : attribErr ? (
+        <DataError message={attribErr} />
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "24px" }}>
+          {(
+            [
+              { key: "nc"      as const, replied: attrib!.ncReplied      },
+              { key: "cu"      as const, replied: attrib!.cuReplied      },
+              { key: "inbound" as const, replied: attrib!.inboundReplied },
+            ]
+          ).map(({ key, replied }) => {
+            const campaign = campaigns.find((c) => c.key === key)
+            return (
+              <div key={key}>
+                <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: campaign?.color ?? C.muted, marginBottom: "8px" }}>
+                  {campaign?.label ?? key}
+                </p>
+                <p style={{ fontSize: "22px", fontWeight: 700, fontFamily: MONO, color: C.amber, lineHeight: 1, marginBottom: "4px" }}>
+                  {replied.length}
+                </p>
+                <p style={{ fontSize: "11px", color: C.muted, marginBottom: "10px" }}>replied</p>
+                {replied.length === 0 ? (
+                  <p style={{ fontSize: "11px", color: C.muted, fontStyle: "italic" }}>No replies yet</p>
+                ) : (
+                  <div>
+                    {replied.map((r) => (
+                      <span key={r.email} style={{ display: "inline-block", padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, background: C.amberDim, color: C.amber, margin: "2px" }}>
+                        {r.company}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Panel>
   )
 }
 
@@ -584,6 +640,9 @@ export function CampaignsDashboard() {
         )}
         {attribErr && <DataError message={attribErr} />}
       </Panel>
+
+      {/* ── Replied companies panel ─────────────────────────────────────────── */}
+      <RepliedPanel attrib={attrib} attribErr={attribErr} campaigns={campaigns} />
 
       {/* ── Inbound attribution panel ───────────────────────────────────────── */}
       <Panel>
