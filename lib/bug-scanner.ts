@@ -89,7 +89,7 @@ export async function scanCodebase(): Promise<{ filesScanned: number; issuesFoun
   const client = new Anthropic()
   const message = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 4096,
+    max_tokens: 8192,
     messages: [
       {
         role: "user",
@@ -124,12 +124,15 @@ ${codebase}
     ],
   })
 
-  // Parse response
-  const raw = message.content[0].type === "text" ? message.content[0].text.trim() : ""
-
   // Check for truncation
   if (message.stop_reason === "max_tokens") {
     throw new Error("[bug-scanner] Claude response was truncated (max_tokens reached) — codebase may be too large")
+  }
+
+  // Parse response — strip markdown fences if Claude added them despite instructions
+  let raw = message.content[0].type === "text" ? message.content[0].text.trim() : ""
+  if (raw.startsWith("```")) {
+    raw = raw.replace(/^```[a-z]*\n?/, "").replace(/\n?```$/, "").trim()
   }
 
   let newRaw: Omit<BugIssue, "id" | "status" | "notes" | "detectedAt" | "updatedAt">[] = []

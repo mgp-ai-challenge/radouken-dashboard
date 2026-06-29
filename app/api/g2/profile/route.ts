@@ -30,7 +30,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      rank: rank ?? { category: "", rank: 0, rankChange: 0 },
+      rank: rank ?? { category: "", rank: 0, rankChange: 0, productScores: { easeOfUse: 0, qualityOfSupport: 0, easeOfSetup: 0 }, categoryScores: { easeOfUse: 0, qualityOfSupport: 0, easeOfSetup: 0 } },
       weeklyViews,
       totalViewsThisMonth,
       totalViewsLastMonth,

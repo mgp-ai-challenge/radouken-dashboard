@@ -21,11 +21,11 @@ export default function RootLayout({
       suppressHydrationWarning
       className={cn("antialiased", inter.variable, "font-sans")}
     >
-      <body className="min-h-svh bg-[#f8f9fa]">
+      <body className="min-h-svh bg-background text-foreground">
         <ThemeProvider>
           <div className="flex h-svh">
             <AppSidebar />
-            <main className="min-h-0 flex-1 p-8">{children}</main>
+            <main className="min-h-0 flex-1 overflow-auto bg-background p-8">{children}</main>
           </div>
         </ThemeProvider>
       </body>

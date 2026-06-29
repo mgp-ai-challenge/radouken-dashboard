@@ -12,9 +12,10 @@ export async function GET() {
   try {
     const allCampaigns = await fetchAllCampaigns()
 
-    // Match each target by substring
+    // Match each target by substring — prefer non-archived when multiple match
     const discovered = TARGET_CAMPAIGNS.map((target) => {
-      const found = allCampaigns.find((c) => c.name.includes(target.match))
+      const matches = allCampaigns.filter((c) => c.name.includes(target.match))
+      const found = matches.find((c) => !(c as Record<string, unknown>).archived) ?? matches[0]
       return {
         key:   target.key,
         id:    found?._id ?? null,
@@ -23,7 +24,7 @@ export async function GET() {
       }
     })
 
-    // Fetch stats for all found campaigns in ONE API call
+    // Fetch stats for all found campaigns sequentially
     const foundIds = discovered.flatMap((c) => c.id ? [c.id] : [])
     const statsMap = foundIds.length > 0 ? await fetchAllCampaignStats(foundIds) : new Map()
 

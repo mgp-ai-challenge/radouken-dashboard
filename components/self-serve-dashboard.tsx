@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import {
   RefreshCw,
   TrendingUp,
@@ -64,14 +64,18 @@ type KpisData = {
   q1ApacNormDau:   number
 }
 type DealInfo  = { id: string; name: string; normDau: number; url: string }
-type StageRow  = { stageId: string; name: string; normDau: number; normDauQ1: number; count: number; deals: DealInfo[] }
+type StageRow  = { stageId: string; name: string; normDau: number; normDauQ1: number; count: number; countQ1: number; deals: DealInfo[]; dealsQ1: DealInfo[] }
 type WeekRow     = { week: string; normDau: number; isCurrent: boolean }
 type MonthRow    = { month: string; submissions: number; approved: number; approvalRate: number; isPartial: boolean }
-type AdMobRow    = { month: string; count: number; quarter: "Q1" | "Q2" }
+type AdMobRow       = { month: string; count: number; quarter: "Q1" | "Q2" }
+type AdMob2025Deal  = { id: string; name: string; normDau: number; signupDate: string; url: string }
+type IronSourceDeal = { id: string; name: string; normDau: number; stage: string; stageId: string; createDate: string; url: string }
 type EmailSplit  = {
   q1: { business: number; free: number; unknown: number }
   q2: { business: number; free: number; unknown: number }
 }
+type SourceRow = { source: string; count: number; pct: number; normDau: number; q1NormDau: number; qoqPct: number | null }
+
 type WeeklyReportData = {
   generatedAt: string
   weekLabel: string
@@ -308,10 +312,13 @@ function KpiCard({
 
 
 // ─── Stage accordion ──────────────────────────────────────────────────────────
-function StageGroup({ stage }: { stage: StageRow }) {
+function StageGroup({ stage, quarter }: { stage: StageRow; quarter: "Q1" | "Q2" }) {
   const [open, setOpen] = useState(false)
   const color = STAGE_COLOR[stage.stageId] ?? C.muted
   const isActive = stage.stageId === "107224655" || stage.stageId === "107224657"
+  const displayDau   = quarter === "Q1" ? stage.normDauQ1 : stage.normDau
+  const displayCount = quarter === "Q1" ? stage.countQ1  : stage.count
+  const displayDeals = quarter === "Q1" ? stage.dealsQ1  : stage.deals
 
   return (
     <div style={{
@@ -352,20 +359,20 @@ function StageGroup({ stage }: { stage: StageRow }) {
           color:      C.muted,
           marginRight: "6px",
         }}>
-          {stage.count} deal{stage.count !== 1 ? "s" : ""}
+          {displayCount} deal{displayCount !== 1 ? "s" : ""}
         </span>
         <span style={{
           fontFamily: MONO,
           fontSize:   "12px",
           fontWeight: 600,
-          color:      stage.normDau > 0 ? color : C.muted,
+          color:      displayDau > 0 ? color : C.muted,
           minWidth:   "52px",
           textAlign:  "right",
         }}>
-          {stage.normDau > 0 ? fmtDau(stage.normDau) : "—"}
+          {displayDau > 0 ? fmtDau(displayDau) : "—"}
         </span>
-        {/* QoQ DAU chip */}
-        {stage.normDauQ1 > 0 ? (() => {
+        {/* QoQ DAU chip — only shown in Q2 mode */}
+        {quarter === "Q2" && (stage.normDauQ1 > 0 ? (() => {
           const pct      = ((stage.normDau - stage.normDauQ1) / stage.normDauQ1) * 100
           const positive = pct >= 0
           return (
@@ -390,9 +397,9 @@ function StageGroup({ stage }: { stage: StageRow }) {
           )
         })() : (
           <span style={{ minWidth: "74px", flexShrink: 0 }} />
-        )}
+        ))}
         {/* Avg DAU per deal */}
-        {stage.count > 0 && (
+        {displayCount > 0 && (
           <span style={{
             fontFamily:  MONO,
             fontSize:    "10px",
@@ -403,7 +410,7 @@ function StageGroup({ stage }: { stage: StageRow }) {
           }}
           title="Avg Norm DAU per deal"
           >
-            ~{fmtDau(Math.round(stage.normDau / stage.count))}/deal
+            ~{fmtDau(Math.round(displayDau / displayCount))}/deal
           </span>
         )}
         <span style={{
@@ -420,7 +427,7 @@ function StageGroup({ stage }: { stage: StageRow }) {
       {/* Deal rows */}
       {open && (
         <div style={{ borderTop: `1px solid ${C.border}` }}>
-          {stage.deals.map((deal, i) => (
+          {displayDeals.map((deal, i) => (
             <div
               key={deal.id}
               style={{
@@ -428,7 +435,7 @@ function StageGroup({ stage }: { stage: StageRow }) {
                 alignItems:    "center",
                 gap:           "10px",
                 padding:       "7px 12px 7px 29px",
-                borderBottom:  i < stage.deals.length - 1 ? `1px solid ${C.border}` : "none",
+                borderBottom:  i < displayDeals.length - 1 ? `1px solid ${C.border}` : "none",
                 background:    "transparent",
               }}
             >
@@ -582,14 +589,54 @@ export function SelfServeDashboard() {
   const [kpisError,      setKpisError]      = useState(false)
   const [stages,         setStages]         = useState<StageRow[] | null>(null)
   const [stagesError,    setStagesError]    = useState(false)
+  const [stageQuarter,   setStageQuarter]   = useState<"Q1" | "Q2">("Q2")
   const [weekly,         setWeekly]         = useState<WeekRow[] | null>(null)
   const [weeklyError,    setWeeklyError]    = useState(false)
   const [monthly,        setMonthly]        = useState<MonthRow[] | null>(null)
   const [monthlyError,   setMonthlyError]   = useState(false)
   const [admob,          setAdmob]          = useState<AdMobRow[] | null>(null)
   const [admobError,     setAdmobError]     = useState(false)
+  const [admob2025,       setAdmob2025]       = useState<AdMob2025Deal[] | null>(null)
+  const [admob2025Error,  setAdmob2025Error]  = useState(false)
+  const [ironSource,      setIronSource]      = useState<IronSourceDeal[] | null>(null)
+  const [ironSourceError, setIronSourceError] = useState(false)
+  const [isYear,          setIsYear]          = useState<"All" | "YTD" | "2024" | "2025" | "2026">("All")
+  const [isQuarter,       setIsQuarter]       = useState<"All" | "Q1" | "Q2" | "Q3" | "Q4">("All")
+
+  const filteredIronSource = useMemo(() => {
+    if (!ironSource) return null
+    if (isYear === "All") return ironSource
+
+    const TODAY = new Date().toISOString().slice(0, 10)
+    const QUARTER_RANGES: Record<string, [string, string]> = {
+      Q1: ["-01-01", "-04-01"],
+      Q2: ["-04-01", "-07-01"],
+      Q3: ["-07-01", "-10-01"],
+      Q4: ["-10-01", "-12-31T99"], // inclusive year-end
+    }
+
+    let start: string
+    let end: string
+
+    if (isYear === "YTD") {
+      start = "2026-01-01"
+      end   = TODAY
+    } else if (isQuarter !== "All") {
+      const [qs, qe] = QUARTER_RANGES[isQuarter]
+      start = isYear + qs
+      end   = isYear + qe
+    } else {
+      start = isYear + "-01-01"
+      end   = isYear + "-12-31T99"
+    }
+
+    return ironSource.filter((d) => d.createDate >= start && d.createDate <= end)
+  }, [ironSource, isYear, isQuarter])
+
   const [emailSplit,     setEmailSplit]     = useState<EmailSplit | null>(null)
   const [emailSplitError,setEmailSplitError]= useState(false)
+  const [sources,        setSources]        = useState<SourceRow[] | null>(null)
+  const [sourcesError,   setSourcesError]   = useState(false)
   const [lastUpdated,    setLastUpdated]    = useState<Date | null>(null)
   const [refreshing,     setRefreshing]     = useState(false)
   const [weeklyReport,      setWeeklyReport]      = useState<WeeklyReportData>(undefined as unknown as WeeklyReportData)
@@ -623,10 +670,51 @@ export function SelfServeDashboard() {
     else setWeeklyReportError(true)
     setLastUpdated(new Date())
     setRefreshing(false)
+
+    // Fetch contact-sources independently — it's slow (multiple sequential HubSpot calls)
+    // so we don't block other panels on it
+    fetch("/api/self-serve/contact-sources")
+      .then((r) => r.json())
+      .then((d) => { if (!d.error) setSources(d); else setSourcesError(true) })
+      .catch(() => setSourcesError(true))
+
+    // Fetch 2025 AdMob/GAM deals independently — reset state before each attempt so errors don't stick
+    setAdmob2025(null)
+    setAdmob2025Error(false)
+    fetch("/api/self-serve/admob-2025")
+      .then((r) => r.json())
+      .then((d) => { if (!d.error) setAdmob2025(d); else setAdmob2025Error(true) })
+      .catch(() => setAdmob2025Error(true))
+
+    // Fetch IronSource deals independently — reset state before each attempt so errors don't stick
+    setIronSource(null)
+    setIronSourceError(false)
+    fetch("/api/self-serve/ironsource")
+      .then((r) => r.json())
+      .then((d) => { if (!d.error) setIronSource(d); else setIronSourceError(true) })
+      .catch(() => setIronSourceError(true))
   }, [])
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true)
+    setKpis(null)
+    setKpisError(false)
+    setStages(null)
+    setStagesError(false)
+    setWeekly(null)
+    setWeeklyError(false)
+    setMonthly(null)
+    setMonthlyError(false)
+    setAdmob(null)
+    setAdmobError(false)
+    setEmailSplit(null)
+    setEmailSplitError(false)
+    setSources(null)
+    setSourcesError(false)
+    setAdmob2025(null)
+    setAdmob2025Error(false)
+    setIronSource(null)
+    setIronSourceError(false)
     await fetchAll()
   }, [fetchAll])
 
@@ -845,7 +933,30 @@ export function SelfServeDashboard() {
 
           {/* Stage breakdown */}
           <Panel style={{ overflowY: "auto", maxHeight: "560px" }}>
-            <SectionLabel>Pipeline Stage Breakdown (Norm DAU)</SectionLabel>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0 }}>Pipeline Stage Breakdown (Norm DAU)</p>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {(["Q1", "Q2"] as const).map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => setStageQuarter(q)}
+                    style={{
+                      padding:      "2px 10px",
+                      borderRadius: "999px",
+                      border:       `1px solid ${stageQuarter === q ? C.accent : C.border}`,
+                      background:   stageQuarter === q ? C.accentDim : "transparent",
+                      color:        stageQuarter === q ? C.accent : C.muted,
+                      fontSize:     "10px",
+                      fontWeight:   600,
+                      cursor:       "pointer",
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    {q} 2026
+                  </button>
+                ))}
+              </div>
+            </div>
             {stagesError ? (
               <DataError label="stage data" />
             ) : !stages ? (
@@ -853,7 +964,7 @@ export function SelfServeDashboard() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {stages.map((s) => (
-                  <StageGroup key={s.stageId} stage={s} />
+                  <StageGroup key={s.stageId} stage={s} quarter={stageQuarter} />
                 ))}
               </div>
             )}
@@ -1241,7 +1352,243 @@ export function SelfServeDashboard() {
           </Panel>
         </div>
 
-        {/* ── Row 5: Weekly Report ─────────────────────────────────────────── */}
+        {/* ── Row 5: Contact Sources ───────────────────────────────────────── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <Panel>
+            <SectionLabel>Last Touch Source — Q2 QTD</SectionLabel>
+            {sourcesError ? (
+              <DataError label="contact sources" />
+            ) : !sources ? (
+              <LoadingSkeleton h={180} />
+            ) : sources.length === 0 ? (
+              <p style={{ fontSize: 12, color: C.muted, padding: "24px 0", textAlign: "center" }}>No data</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
+                {/* Column headers */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
+                  <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Source</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 48, textAlign: "right" }}>Norm DAU</span>
+                    <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 36, textAlign: "right" }}>QoQ</span>
+                    <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 44, textAlign: "right" }}>Deals</span>
+                  </div>
+                </div>
+                {sources.map((row, i) => {
+                  const barColors = [C.accent, C.blue, C.amber, C.purple, C.red, C.muted]
+                  const color = barColors[i % barColors.length]
+                  const qoqPositive = row.qoqPct !== null && row.qoqPct >= 0
+                  return (
+                    <div key={row.source}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                        <span style={{ fontSize: 11, color: C.sage }}>{row.source}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, color: C.sageLight, fontFamily: MONO, fontWeight: 600, minWidth: 48, textAlign: "right" }}>
+                            {fmtNum(row.normDau ?? 0)}
+                          </span>
+                          <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 500, minWidth: 36, textAlign: "right",
+                            color: row.qoqPct === null ? C.muted : qoqPositive ? C.accent : C.red,
+                          }}>
+                            {row.qoqPct === null ? "—" : `${qoqPositive ? "+" : ""}${row.qoqPct}%`}
+                          </span>
+                          <span style={{ fontSize: 10, color: C.muted, fontFamily: MONO, minWidth: 44, textAlign: "right" }}>
+                            {row.count}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ height: 4, borderRadius: 2, background: C.border }}>
+                        <div style={{ height: "100%", borderRadius: 2, background: color, width: `${row.pct}%`, transition: "width 0.4s ease" }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Panel>
+        </div>
+
+        {/* ── Row 6: AdMob / GAM — 2025 Cohort ────────────────────────────── */}
+        <Panel style={{ overflowY: "auto", maxHeight: "400px" }}>
+          <SectionLabel>AdMob / GAM — 2025 Signups (current stage)</SectionLabel>
+          {admob2025Error ? (
+            <DataError label="AdMob 2025 data" />
+          ) : !admob2025 ? (
+            <LoadingSkeleton h={200} />
+          ) : admob2025.length === 0 ? (
+            <p style={{ fontSize: 12, color: C.muted, padding: "24px 0", textAlign: "center" }}>No deals found</p>
+          ) : (
+            <>
+              {/* Summary */}
+              <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
+                <span style={{ fontSize: "11px", color: C.muted }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 600, color: C.sageLight }}>{admob2025.length}</span> deals
+                </span>
+                <span style={{ fontSize: "11px", color: C.muted }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 600, color: C.purple }}>
+                    {fmtDau(admob2025.reduce((s, d) => s + d.normDau, 0))}
+                  </span> total Norm DAU
+                </span>
+              </div>
+              {/* Column headers */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 90px 80px 28px", gap: "8px", padding: "5px 8px", borderBottom: `1px solid ${C.border}` }}>
+                {["Deal", "Norm DAU", "Signup", ""].map((h) => (
+                  <span key={h} style={{ fontSize: "10px", color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: h === "Norm DAU" ? "right" : "left" }}>{h}</span>
+                ))}
+              </div>
+              {/* Rows */}
+              {admob2025.map((deal, i) => (
+                <div
+                  key={deal.id}
+                  style={{
+                    display:         "grid",
+                    gridTemplateColumns: "1fr 90px 80px 28px",
+                    gap:             "8px",
+                    alignItems:      "center",
+                    padding:         "6px 8px",
+                    borderBottom:    i < admob2025.length - 1 ? `1px solid ${C.border}` : "none",
+                    background:      i % 2 === 0 ? "transparent" : C.cardAlt,
+                    borderRadius:    "4px",
+                  }}
+                >
+                  <span style={{ fontSize: "12px", color: C.sage, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {deal.name}
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: deal.normDau > 0 ? C.purple : C.muted, textAlign: "right" }}>
+                    {deal.normDau > 0 ? fmtDau(deal.normDau) : "—"}
+                  </span>
+                  <span style={{ fontFamily: MONO, fontSize: "10px", color: C.muted }}>
+                    {deal.signupDate || "—"}
+                  </span>
+                  <a
+                    href={deal.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      width: "20px", height: "20px", borderRadius: "5px",
+                      background: C.accentGlow, border: `1px solid ${C.border}`,
+                      color: C.muted, fontSize: "10px", textDecoration: "none",
+                    }}
+                  >
+                    ↗
+                  </a>
+                </div>
+              ))}
+            </>
+          )}
+        </Panel>
+
+        {/* ── Row 7: IronSource Deals ──────────────────────────────────────── */}
+        <Panel style={{ overflowY: "auto", maxHeight: "400px" }}>
+          {/* Header + filters */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+            <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0 }}>
+              IronSource — Pipeline Deals
+            </p>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {/* Year filter */}
+              <div style={{ display: "flex", gap: "3px" }}>
+                {(["All", "YTD", "2024", "2025", "2026"] as const).map((y) => (
+                  <button key={y} onClick={() => { setIsYear(y); setIsQuarter("All") }} style={{
+                    padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, cursor: "pointer",
+                    border:      `1px solid ${isYear === y ? C.amber : C.border}`,
+                    background:  isYear === y ? `${C.amber}22` : "transparent",
+                    color:       isYear === y ? C.amber : C.muted,
+                    letterSpacing: "0.02em",
+                  }}>{y}</button>
+                ))}
+              </div>
+              {/* Quarter filter — hidden for YTD */}
+              {isYear !== "YTD" && isYear !== "All" && (
+                <div style={{ display: "flex", gap: "3px" }}>
+                  {(["All", "Q1", "Q2", "Q3", "Q4"] as const).map((q) => (
+                    <button key={q} onClick={() => setIsQuarter(q)} style={{
+                      padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, cursor: "pointer",
+                      border:     `1px solid ${isQuarter === q ? C.accent : C.border}`,
+                      background: isQuarter === q ? C.accentDim : "transparent",
+                      color:      isQuarter === q ? C.accent : C.muted,
+                      letterSpacing: "0.02em",
+                    }}>{q}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {ironSourceError ? (
+            <DataError label="IronSource data" />
+          ) : !filteredIronSource ? (
+            <LoadingSkeleton h={200} />
+          ) : filteredIronSource.length === 0 ? (
+            <p style={{ fontSize: 12, color: C.muted, padding: "24px 0", textAlign: "center" }}>No deals found</p>
+          ) : (
+            <>
+              {/* Summary */}
+              <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
+                <span style={{ fontSize: "11px", color: C.muted }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 600, color: C.sageLight }}>{filteredIronSource.length}</span> deals
+                </span>
+                <span style={{ fontSize: "11px", color: C.muted }}>
+                  <span style={{ fontFamily: MONO, fontWeight: 600, color: C.amber }}>
+                    {fmtDau(filteredIronSource.reduce((s, d) => s + d.normDau, 0))}
+                  </span> total Norm DAU
+                </span>
+              </div>
+              {/* Column headers */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 90px 80px 28px", gap: "8px", padding: "5px 8px", borderBottom: `1px solid ${C.border}` }}>
+                {[["Deal", "left"], ["Norm DAU", "right"], ["Stage", "left"], ["Created", "left"], ["", "left"]].map(([h, align]) => (
+                  <span key={h} style={{ fontSize: "10px", color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: align as "left" | "right" }}>{h}</span>
+                ))}
+              </div>
+              {/* Rows */}
+              {filteredIronSource.map((deal, i) => {
+                const stageColor = STAGE_COLOR[deal.stageId] ?? C.muted
+                return (
+                  <div
+                    key={deal.id}
+                    style={{
+                      display:             "grid",
+                      gridTemplateColumns: "1fr 120px 90px 80px 28px",
+                      gap:                 "8px",
+                      alignItems:          "center",
+                      padding:             "6px 8px",
+                      borderBottom:        i < filteredIronSource.length - 1 ? `1px solid ${C.border}` : "none",
+                      background:          i % 2 === 0 ? "transparent" : C.cardAlt,
+                      borderRadius:        "4px",
+                    }}
+                  >
+                    <span style={{ fontSize: "12px", color: C.sage, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {deal.name}
+                    </span>
+                    <span style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: deal.normDau > 0 ? C.amber : C.muted, textAlign: "right" }}>
+                      {deal.normDau > 0 ? fmtDau(deal.normDau) : "—"}
+                    </span>
+                    <span style={{ fontSize: "10px", color: stageColor, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {deal.stage}
+                    </span>
+                    <span style={{ fontFamily: MONO, fontSize: "10px", color: C.muted }}>
+                      {deal.createDate || "—"}
+                    </span>
+                    <a
+                      href={deal.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        width: "20px", height: "20px", borderRadius: "5px",
+                        background: C.accentGlow, border: `1px solid ${C.border}`,
+                        color: C.muted, fontSize: "10px", textDecoration: "none",
+                      }}
+                    >
+                      ↗
+                    </a>
+                  </div>
+                )
+              })}
+            </>
+          )}
+        </Panel>
+
+        {/* ── Row 8: Weekly Report ─────────────────────────────────────────── */}
         <Panel>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <SectionLabel>Weekly Report</SectionLabel>

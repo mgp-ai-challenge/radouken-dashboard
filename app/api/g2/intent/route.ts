@@ -3,6 +3,11 @@ import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
+function parseList(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  return raw.split(/[;\n]+/).map((s) => s.trim()).filter(Boolean)
+}
+
 interface HsCompany {
   id: string
   properties: Record<string, string | null>
@@ -24,7 +29,7 @@ async function searchIntentCompanies(days: number): Promise<HsCompany[]> {
         ],
       },
     ],
-    properties: ["name", "domain", "g2_intent_score", "g2_buyer_intent_activity_level", "g2_buyer_intent_buying_stage", "g2_buyer_intent_details", "hs_lastmodifieddate", "lifecyclestage"],
+    properties: ["name", "domain", "g2_intent_score", "g2_buyer_intent_activity_level", "g2_buyer_intent_buying_stage", "g2_buyer_intent_details", "hs_lastmodifieddate", "lifecyclestage", "g2_industry", "g2_product_name", "g2_signals_page", "g2_related_products", "g2_related_product_details"],
     sorts: [{ propertyName: "hs_lastmodifieddate", direction: "DESCENDING" }],
     limit: 50,
   }
@@ -83,6 +88,11 @@ export async function GET(req: Request) {
         intentDetails: c.properties.g2_buyer_intent_details ?? null,
         lastSignalAt,
         lifecycleStage: c.properties.lifecyclestage ?? null,
+        industry: c.properties.g2_industry ?? null,
+        productName: c.properties.g2_product_name ?? null,
+        signalsPage: c.properties.g2_signals_page ?? null,
+        relatedProducts: parseList(c.properties.g2_related_products),
+        relatedProductDetails: c.properties.g2_related_product_details ?? null,
       }
     })
 

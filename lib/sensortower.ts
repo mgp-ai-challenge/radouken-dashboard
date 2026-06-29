@@ -2,6 +2,9 @@
 
 const ST_BASE = "https://api.sensortower.com"
 
+const _cache = new Map<string, { ts: number; data: AppEnrichment }>()
+const CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
+
 export interface AppEnrichment {
   companyId: string
   hasApp: boolean
@@ -101,63 +104,67 @@ function buildStoreUrl(appId: string | number, store: "ios" | "android"): string
 }
 
 export async function enrichCompany(companyId: string, name: string): Promise<AppEnrichment> {
+  const cacheKey = name.toLowerCase().trim()
+  const cached = _cache.get(cacheKey)
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return { ...cached.data, companyId }
+
   const empty: AppEnrichment = {
     companyId, hasApp: false, platform: null,
     appName: null, monthlyDownloads: null, storeUrl: null,
   }
+
+  let result: AppEnrichment
   try {
     const [iosPubResult, androidPubResult] = await Promise.allSettled([
       searchPublisher(name, "ios"),
       searchPublisher(name, "android"),
     ])
-    const iosPub    = iosPubResult.status    === "fulfilled" ? iosPubResult.value    : null
+    const iosPub     = iosPubResult.status    === "fulfilled" ? iosPubResult.value    : null
     const androidPub = androidPubResult.status === "fulfilled" ? androidPubResult.value : null
 
-    if (!iosPub && !androidPub) return empty
+    if (!iosPub && !androidPub) {
+      result = empty
+    } else {
+      const [iosAppResult, androidAppResult] = await Promise.allSettled([
+        iosPub     ? getTopApp(iosPub.publisher_id,     "ios")     : Promise.resolve(null),
+        androidPub ? getTopApp(androidPub.publisher_id, "android") : Promise.resolve(null),
+      ])
+      const ios     = iosAppResult.status    === "fulfilled" ? iosAppResult.value    : null
+      const android = androidAppResult.status === "fulfilled" ? androidAppResult.value : null
 
-    const [iosAppResult, androidAppResult] = await Promise.allSettled([
-      iosPub     ? getTopApp(iosPub.publisher_id,     "ios")     : Promise.resolve(null),
-      androidPub ? getTopApp(androidPub.publisher_id, "android") : Promise.resolve(null),
-    ])
-    const ios     = iosAppResult.status     === "fulfilled" ? iosAppResult.value     : null
-    const android = androidAppResult.status === "fulfilled" ? androidAppResult.value : null
-
-    if (!ios && !android) return empty
-
-    if (ios && android) {
-      const iosDl = extractDownloads(ios.humanized_worldwide_last_30_days_downloads)
-      const andDl = extractDownloads(android.humanized_worldwide_last_30_days_downloads)
-      const parts = [
-        iosDl ? `${iosDl} iOS` : null,
-        andDl ? `${andDl} Android` : null,
-      ].filter(Boolean)
-      return {
-        companyId,
-        hasApp: true,
-        platform: "both",
-        appName: ios.name,
-        monthlyDownloads: parts.length > 0 ? parts.join(" + ") : null,
-        storeUrl: buildStoreUrl(ios.app_id, "ios"),
+      if (!ios && !android) {
+        result = empty
+      } else if (ios && android) {
+        const iosDl = extractDownloads(ios.humanized_worldwide_last_30_days_downloads)
+        const andDl = extractDownloads(android.humanized_worldwide_last_30_days_downloads)
+        const parts = [iosDl ? `${iosDl} iOS` : null, andDl ? `${andDl} Android` : null].filter(Boolean)
+        result = {
+          companyId, hasApp: true, platform: "both",
+          appName: ios.name,
+          monthlyDownloads: parts.length > 0 ? parts.join(" + ") : null,
+          storeUrl: buildStoreUrl(ios.app_id, "ios"),
+        }
+      } else if (ios) {
+        result = {
+          companyId, hasApp: true, platform: "ios",
+          appName: ios.name,
+          monthlyDownloads: extractDownloads(ios.humanized_worldwide_last_30_days_downloads),
+          storeUrl: buildStoreUrl(ios.app_id, "ios"),
+        }
+      } else {
+        result = {
+          companyId, hasApp: true, platform: "android",
+          appName: android!.name,
+          monthlyDownloads: extractDownloads(android!.humanized_worldwide_last_30_days_downloads),
+          storeUrl: buildStoreUrl(android!.app_id, "android"),
+        }
       }
-    }
-
-    if (ios) {
-      return {
-        companyId, hasApp: true, platform: "ios",
-        appName: ios.name,
-        monthlyDownloads: extractDownloads(ios.humanized_worldwide_last_30_days_downloads),
-        storeUrl: buildStoreUrl(ios.app_id, "ios"),
-      }
-    }
-
-    return {
-      companyId, hasApp: true, platform: "android",
-      appName: android!.name,
-      monthlyDownloads: extractDownloads(android!.humanized_worldwide_last_30_days_downloads),
-      storeUrl: buildStoreUrl(android!.app_id, "android"),
     }
   } catch (err) {
     console.error(`[sensortower] enrichCompany failed for "${name}":`, err)
-    return empty
+    result = empty
   }
+
+  _cache.set(cacheKey, { ts: Date.now(), data: result })
+  return result
 }
