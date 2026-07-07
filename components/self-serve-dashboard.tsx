@@ -69,13 +69,11 @@ type DealInfo  = { id: string; name: string; normDau: number; url: string }
 type StageRow  = { stageId: string; name: string; normDau: number; normDauQ1: number; normDauQ3: number; count: number; countQ1: number; countQ3: number; deals: DealInfo[]; dealsQ1: DealInfo[]; dealsQ3: DealInfo[] }
 type WeekRow     = { week: string; normDau: number; isCurrent: boolean }
 type MonthRow    = { month: string; submissions: number; approved: number; approvalRate: number; isPartial: boolean }
-type AdMobRow       = { month: string; count: number; quarter: "Q1" | "Q2" }
+type AdMobRow       = { month: string; count: number; quarter: string }
 type AdMob2025Deal  = { id: string; name: string; normDau: number; signupDate: string; url: string }
 type IronSourceDeal = { id: string; name: string; normDau: number; stage: string; stageId: string; createDate: string; url: string }
-type EmailSplit  = {
-  q1: { business: number; free: number; unknown: number }
-  q2: { business: number; free: number; unknown: number }
-}
+type EmailSplitRow = { quarter: string; business: number; free: number; unknown: number }
+type EmailSplit    = EmailSplitRow[]
 type SourceRow = { source: string; count: number; pct: number; normDau: number; q1NormDau: number; qoqPct: number | null }
 
 type WeeklyReportData = {
@@ -746,8 +744,9 @@ export function SelfServeDashboard() {
 
   const qtdTarget  = 1_000_000
   const apacTarget = 300_000
-  const q2FreeRate = emailSplit
-    ? emailSplit.q2.free / Math.max(emailSplit.q2.business + emailSplit.q2.free, 1)
+  const latestEmailSplit = emailSplit ? emailSplit[emailSplit.length - 1] : null
+  const q2FreeRate = latestEmailSplit
+    ? latestEmailSplit.free / Math.max(latestEmailSplit.business + latestEmailSplit.free, 1)
     : 0
 
   return (
@@ -1189,167 +1188,176 @@ export function SelfServeDashboard() {
 
           {/* AdMob */}
           <Panel>
-            <SectionLabel>AdMob Submissions — Q1 vs Q2</SectionLabel>
+            <SectionLabel>AdMob Submissions — {new Date().getFullYear()} YTD</SectionLabel>
             {admobError ? (
               <DataError label="AdMob data" />
             ) : !admob ? (
               <LoadingSkeleton h={220} />
             ) : (
-              <>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart
-                    data={admob}
-                    barSize={18}
-                    margin={{ top: 24, right: 4, bottom: 0, left: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="2 5" stroke={C.grid} vertical={false} />
-                    <XAxis
-                      dataKey="month"
-                      tick={{ fill: C.muted, fontSize: 10, fontFamily: MONO }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: C.muted, fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={24}
-                      allowDecimals={false}
-                    />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: C.accentGlow }} />
-                    <Bar dataKey="count" name="AdMob deals" radius={[4, 4, 0, 0]}>
-                      {admob.map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={entry.quarter === "Q2" ? C.amber : C.purple}
-                          opacity={entry.quarter === "Q1" ? 0.6 : 0.95}
+              (() => {
+                const QUARTER_COLORS: Record<string, string> = { Q1: C.purple, Q2: C.amber, Q3: C.blue, Q4: C.accent }
+                const quarters = Array.from(new Set(admob.map((r) => r.quarter)))
+                return (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart
+                        data={admob}
+                        barSize={18}
+                        margin={{ top: 24, right: 4, bottom: 0, left: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="2 5" stroke={C.grid} vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tick={{ fill: C.muted, fontSize: 10, fontFamily: MONO }}
+                          axisLine={false}
+                          tickLine={false}
                         />
+                        <YAxis
+                          tick={{ fill: C.muted, fontSize: 10 }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={24}
+                          allowDecimals={false}
+                        />
+                        <Tooltip content={<ChartTooltip />} cursor={{ fill: C.accentGlow }} />
+                        <Bar dataKey="count" name="AdMob deals" radius={[4, 4, 0, 0]}>
+                          {admob.map((entry, i) => (
+                            <Cell
+                              key={i}
+                              fill={QUARTER_COLORS[entry.quarter] ?? C.muted}
+                              opacity={0.9}
+                            />
+                          ))}
+                          <LabelList
+                            dataKey="count"
+                            position="top"
+                            content={({ x, y, width, value, index }) => {
+                              if (value == null || !admob) return null
+                              const color = QUARTER_COLORS[admob[index as number]?.quarter] ?? C.muted
+                              return (
+                                <text
+                                  x={Number(x) + Number(width) / 2}
+                                  y={Number(y) - 5}
+                                  textAnchor="middle"
+                                  fontSize={9.5}
+                                  fontFamily={MONO}
+                                  fontWeight={500}
+                                  fill={color}
+                                >
+                                  {value as number}
+                                </text>
+                              )
+                            }}
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+
+                    {/* Legend */}
+                    <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
+                      {quarters.map((q) => (
+                        <span key={q} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", color: C.muted }}>
+                          <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: QUARTER_COLORS[q] ?? C.muted, display: "inline-block" }} />
+                          {q}
+                        </span>
                       ))}
-                      <LabelList
-                        dataKey="count"
-                        position="top"
-                        content={({ x, y, width, value, index }) => {
-                          if (value == null || !admob) return null
-                          const isQ2 = admob[index as number]?.quarter === "Q2"
-                          return (
-                            <text
-                              x={Number(x) + Number(width) / 2}
-                              y={Number(y) - 5}
-                              textAnchor="middle"
-                              fontSize={9.5}
-                              fontFamily={MONO}
-                              fontWeight={500}
-                              fill={isQ2 ? C.amber : C.purple}
-                            >
-                              {value as number}
-                            </text>
-                          )
-                        }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-
-                {/* Legend */}
-                <div style={{ display: "flex", gap: "16px", marginTop: "8px" }}>
-                  {[{ label: "Q1", color: C.purple, opacity: 0.6 }, { label: "Q2", color: C.amber, opacity: 1 }].map(({ label, color, opacity }) => (
-                    <span key={label} style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "11px", color: C.muted }}>
-                      <span style={{ width: "8px", height: "8px", borderRadius: "2px", background: color, opacity, display: "inline-block" }} />
-                      {label}
-                    </span>
-                  ))}
-                </div>
-
-              </>
+                    </div>
+                  </>
+                )
+              })()
             )}
           </Panel>
 
           {/* Email Split */}
           <Panel>
-            <SectionLabel>Email Type — Business vs Free</SectionLabel>
+            <SectionLabel>Email Type — Business vs Free ({new Date().getFullYear()} YTD)</SectionLabel>
             {emailSplitError ? (
               <DataError label="email split" />
             ) : !emailSplit ? (
               <LoadingSkeleton h={220} />
             ) : (
-              <>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart
-                    data={[
-                      { quarter: "Q1", Business: emailSplit.q1.business, Free: emailSplit.q1.free },
-                      { quarter: "Q2", Business: emailSplit.q2.business, Free: emailSplit.q2.free },
-                    ]}
-                    barGap={4}
-                    margin={{ top: 24, right: 4, bottom: 0, left: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="2 5" stroke={C.grid} vertical={false} />
-                    <XAxis
-                      dataKey="quarter"
-                      tick={{ fill: C.muted, fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: C.muted, fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={32}
-                      allowDecimals={false}
-                    />
-                    <Tooltip content={<ChartTooltip />} cursor={{ fill: C.accentGlow }} />
-                    <Bar dataKey="Business" fill={C.blue} radius={[3, 3, 0, 0]} barSize={32} opacity={0.9}>
-                      <LabelList
-                        dataKey="Business"
-                        position="top"
-                        content={({ x, y, width, value }) => {
-                          if (value == null) return null
-                          return (
-                            <text
-                              x={Number(x) + Number(width) / 2}
-                              y={Number(y) - 5}
-                              textAnchor="middle"
-                              fontSize={9.5}
-                              fontFamily={MONO}
-                              fontWeight={500}
-                              fill={C.blue}
-                            >
-                              {value as number}
-                            </text>
-                          )
-                        }}
-                      />
-                    </Bar>
-                    <Bar dataKey="Free" fill={C.red} radius={[3, 3, 0, 0]} barSize={32} opacity={0.85}>
-                      <LabelList
-                        dataKey="Free"
-                        position="top"
-                        content={({ x, y, width, value }) => {
-                          if (value == null) return null
-                          return (
-                            <text
-                              x={Number(x) + Number(width) / 2}
-                              y={Number(y) - 5}
-                              textAnchor="middle"
-                              fontSize={9.5}
-                              fontFamily={MONO}
-                              fontWeight={500}
-                              fill={C.red}
-                            >
-                              {value as number}
-                            </text>
-                          )
-                        }}
-                      />
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              (() => {
+                const chartData = emailSplit.map((r) => ({ quarter: r.quarter, Business: r.business, Free: r.free }))
+                const latest = emailSplit[emailSplit.length - 1]
+                return (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart
+                        data={chartData}
+                        barGap={4}
+                        margin={{ top: 24, right: 4, bottom: 0, left: 0 }}
+                      >
+                        <CartesianGrid strokeDasharray="2 5" stroke={C.grid} vertical={false} />
+                        <XAxis
+                          dataKey="quarter"
+                          tick={{ fill: C.muted, fontSize: 10 }}
+                          axisLine={false}
+                          tickLine={false}
+                        />
+                        <YAxis
+                          tick={{ fill: C.muted, fontSize: 10 }}
+                          axisLine={false}
+                          tickLine={false}
+                          width={32}
+                          allowDecimals={false}
+                        />
+                        <Tooltip content={<ChartTooltip />} cursor={{ fill: C.accentGlow }} />
+                        <Bar dataKey="Business" fill={C.blue} radius={[3, 3, 0, 0]} barSize={32} opacity={0.9}>
+                          <LabelList
+                            dataKey="Business"
+                            position="top"
+                            content={({ x, y, width, value }) => {
+                              if (value == null) return null
+                              return (
+                                <text
+                                  x={Number(x) + Number(width) / 2}
+                                  y={Number(y) - 5}
+                                  textAnchor="middle"
+                                  fontSize={9.5}
+                                  fontFamily={MONO}
+                                  fontWeight={500}
+                                  fill={C.blue}
+                                >
+                                  {value as number}
+                                </text>
+                              )
+                            }}
+                          />
+                        </Bar>
+                        <Bar dataKey="Free" fill={C.red} radius={[3, 3, 0, 0]} barSize={32} opacity={0.85}>
+                          <LabelList
+                            dataKey="Free"
+                            position="top"
+                            content={({ x, y, width, value }) => {
+                              if (value == null) return null
+                              return (
+                                <text
+                                  x={Number(x) + Number(width) / 2}
+                                  y={Number(y) - 5}
+                                  textAnchor="middle"
+                                  fontSize={9.5}
+                                  fontFamily={MONO}
+                                  fontWeight={500}
+                                  fill={C.red}
+                                >
+                                  {value as number}
+                                </text>
+                              )
+                            }}
+                          />
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
 
-
-                <p style={{ marginTop: "10px", fontSize: "11px", color: C.muted }}>
-                  Q2: {emailSplit.q2.business} business · {emailSplit.q2.free} free
-                  {emailSplit.q2.unknown > 0 && ` · ${emailSplit.q2.unknown} no email`}
-                </p>
-              </>
+                    {latest && (
+                      <p style={{ marginTop: "10px", fontSize: "11px", color: C.muted }}>
+                        {latest.quarter}: {latest.business} business · {latest.free} free
+                        {latest.unknown > 0 && ` · ${latest.unknown} no email`}
+                      </p>
+                    )}
+                  </>
+                )
+              })()
             )}
           </Panel>
         </div>

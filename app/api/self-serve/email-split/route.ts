@@ -83,34 +83,35 @@ async function batchGetContactEmails(dealIds: string[]): Promise<Map<string, str
   return emailMap
 }
 
+// Build quarter date ranges for the current year up to today
+function buildQuarters() {
+  const now = new Date()
+  const year = now.getUTCFullYear()
+  const currentMonth = now.getUTCMonth() // 0-indexed
+  const currentQ = Math.floor(currentMonth / 3) + 1 // 1-indexed
+  const pad = (n: number) => String(n).padStart(2, "0")
+
+  const quarters = []
+  for (let q = 1; q <= currentQ; q++) {
+    const startMonth = (q - 1) * 3 + 1
+    const endMonth = q * 3 + 1 <= 12 ? q * 3 + 1 : 1
+    const endYear = q * 3 + 1 <= 12 ? year : year + 1
+    quarters.push({
+      label: `Q${q}`,
+      start: `${year}-${pad(startMonth)}-01`,
+      end:   `${endYear}-${pad(endMonth)}-01`, // exclusive
+    })
+  }
+  return quarters
+}
+
 export async function GET() {
   if (cache && Date.now() - cache.ts < CACHE_TTL) {
     return NextResponse.json(cache.data)
   }
 
   try {
-    const [q1Deals, q2Deals] = await Promise.all([
-      searchDeals(
-        [
-          { propertyName: "pipeline", operator: "EQ", value: PIPELINE },
-          { propertyName: "createdate", operator: "GTE", value: "2026-01-01" },
-          { propertyName: "createdate", operator: "LTE", value: "2026-03-31" },
-        ],
-        ["createdate"]
-      ),
-      searchDeals(
-        [
-          { propertyName: "pipeline", operator: "EQ", value: PIPELINE },
-          { propertyName: "createdate", operator: "GTE", value: "2026-04-01" },
-        ],
-        ["createdate"]
-      ),
-    ])
-
-    const [q1Emails, q2Emails] = await Promise.all([
-      batchGetContactEmails(q1Deals.map((d) => d.id)),
-      batchGetContactEmails(q2Deals.map((d) => d.id)),
-    ])
+    const quarters = buildQuarters()
 
     const classify = (emailMap: Map<string, string>, deals: { id: string }[]) => {
       let business = 0, free = 0, unknown = 0
@@ -122,10 +123,27 @@ export async function GET() {
       return { business, free, unknown }
     }
 
-    const data = {
-      q1: classify(q1Emails, q1Deals),
-      q2: classify(q2Emails, q2Deals),
-    }
+    const allDeals = await Promise.all(
+      quarters.map(({ start, end }) =>
+        searchDeals(
+          [
+            { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+            { propertyName: "createdate", operator: "GTE", value: start },
+            { propertyName: "createdate", operator: "LT",  value: end },
+          ],
+          ["createdate"]
+        )
+      )
+    )
+
+    const allEmails = await Promise.all(
+      allDeals.map((deals) => batchGetContactEmails(deals.map((d) => d.id)))
+    )
+
+    const data = quarters.map(({ label }, i) => ({
+      quarter: label,
+      ...classify(allEmails[i], allDeals[i]),
+    }))
 
     cache = { ts: Date.now(), data }
     return NextResponse.json(data)
