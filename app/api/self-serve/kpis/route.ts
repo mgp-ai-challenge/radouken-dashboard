@@ -70,83 +70,122 @@ async function getApacDau(
   return Math.round(apacDau)
 }
 
+function quarterBounds() {
+  const now = new Date()
+  const year = now.getUTCFullYear()
+  const q = Math.floor(now.getUTCMonth() / 3) + 1 // 1–4
+  const pad = (n: number) => String(n).padStart(2, "0")
+
+  const curMonthStart = (q - 1) * 3 + 1
+  const curStart = `${year}-${pad(curMonthStart)}-01`
+
+  const prevQ = q === 1 ? 4 : q - 1
+  const prevYear = q === 1 ? year - 1 : year
+  const prevMonthStart = (prevQ - 1) * 3 + 1
+  const prevStart = `${prevYear}-${pad(prevMonthStart)}-01`
+  const prevEnd = curStart // exclusive
+
+  return {
+    currentQuarter: `Q${q} ${year}`,
+    prevQuarter:    `Q${prevQ} ${prevYear}`,
+    curStart,
+    prevStart,
+    prevEnd,
+  }
+}
+
 export async function GET() {
   try {
-    const q2Start = "2026-04-01"
+    const { currentQuarter, prevQuarter, curStart, prevStart, prevEnd } = quarterBounds()
     const thisMonday = currentWeekMonday()
     const lastMonday = mondayWeeksAgo(1)
     const thisMondayStr = thisMonday.toISOString().split("T")[0]
     const lastMondayStr = lastMonday.toISOString().split("T")[0]
 
-    // Fetch Q2 Approved+Live deals — single search, derive all week/APAC values from it
-    const qtdDeals = await searchDeals(
-      [
-        { propertyName: "pipeline", operator: "EQ", value: PIPELINE },
-        { propertyName: "dealstage", operator: "IN", values: ACTIVE_STAGES },
-        { propertyName: "createdate", operator: "GTE", value: q2Start },
-      ],
-      ["normalised_dau__us_dau__tier_1__065", "createdate", "hs_v2_date_entered_107224655"]
-    )
+    const NEW_REG_STAGE = "107224653"
 
-    // All Q2 deals for submission count
-    const q2All = await searchDeals(
-      [
-        { propertyName: "pipeline", operator: "EQ", value: PIPELINE },
-        { propertyName: "createdate", operator: "GTE", value: q2Start },
-      ],
-      ["createdate"]
-    )
-
-    // Q1 Approved+Live deals for DAU comparison + all Q1 deals for submission count
-    const [q1Deals, q1All] = await Promise.all([
+    // Current quarter: deals that entered New Registration this quarter and are now Approved or Live
+    // Uses hs_v2_date_entered on New Registration — matches the pipeline stage breakdown tab logic
+    const [qtdDeals, curAll, prevDeals, prevAll] = await Promise.all([
       searchDeals(
         [
-          { propertyName: "pipeline", operator: "EQ", value: PIPELINE },
-          { propertyName: "dealstage", operator: "IN", values: ACTIVE_STAGES },
-          { propertyName: "createdate", operator: "GTE", value: "2026-01-01" },
-          { propertyName: "createdate", operator: "LT",  value: q2Start },
+          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
+          { propertyName: "dealstage",                               operator: "IN",  values: ACTIVE_STAGES },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: curStart },
+        ],
+        ["normalised_dau__us_dau__tier_1__065", "hs_v2_date_entered_107224655"]
+      ),
+      searchDeals(
+        [
+          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: curStart },
+        ],
+        ["createdate"]
+      ),
+      // Previous quarter: same logic
+      searchDeals(
+        [
+          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
+          { propertyName: "dealstage",                               operator: "IN",  values: ACTIVE_STAGES },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: prevStart },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "LT",  value: prevEnd },
         ],
         ["normalised_dau__us_dau__tier_1__065"]
       ),
       searchDeals(
         [
-          { propertyName: "pipeline", operator: "EQ", value: PIPELINE },
-          { propertyName: "createdate", operator: "GTE", value: "2026-01-01" },
-          { propertyName: "createdate", operator: "LT",  value: q2Start },
+          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: prevStart },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "LT",  value: prevEnd },
         ],
         ["createdate"]
       ),
     ])
 
-    const q1NormDau = q1Deals.reduce(
+    const prevQNormDau = prevDeals.reduce(
       (sum, d) => sum + (parseFloat(d.properties.normalised_dau__us_dau__tier_1__065 ?? "0") || 0),
       0
     )
 
-    let qtdNormDau = 0, thisWeekNormDau = 0, prevWeekNormDau = 0
-    for (const deal of qtdDeals) {
+    const qtdNormDau = qtdDeals.reduce(
+      (sum, d) => sum + (parseFloat(d.properties.normalised_dau__us_dau__tier_1__065 ?? "0") || 0),
+      0
+    )
+
+    // Week-on-week: all currently active deals approved this/last week — not scoped to quarter cohort
+    const weeklyDeals = await searchDeals(
+      [
+        { propertyName: "pipeline",                    operator: "EQ",  value: PIPELINE },
+        { propertyName: "dealstage",                   operator: "IN",  values: ACTIVE_STAGES },
+        { propertyName: "hs_v2_date_entered_107224655", operator: "GTE", value: lastMondayStr },
+      ],
+      ["normalised_dau__us_dau__tier_1__065", "hs_v2_date_entered_107224655"]
+    )
+
+    let thisWeekNormDau = 0, prevWeekNormDau = 0
+    for (const deal of weeklyDeals) {
       const dau = parseFloat(deal.properties.normalised_dau__us_dau__tier_1__065 ?? "0") || 0
       const approvedAt = deal.properties.hs_v2_date_entered_107224655 ?? ""
-      qtdNormDau += dau
       if (approvedAt >= thisMondayStr) thisWeekNormDau += dau
-      else if (approvedAt >= lastMondayStr) prevWeekNormDau += dau
+      else prevWeekNormDau += dau
     }
 
-    // APAC: look up via contact ip_country matching APAC region (Q2 + Q1)
-    const [apacNormDau, q1ApacNormDau] = await Promise.all([
+    const [apacNormDau, prevQApacNormDau] = await Promise.all([
       getApacDau(qtdDeals),
-      getApacDau(q1Deals),
+      getApacDau(prevDeals),
     ])
 
     return NextResponse.json({
-      qtdNormDau: Math.round(qtdNormDau),
-      q1NormDau: Math.round(q1NormDau),
-      thisWeekNormDau: Math.round(thisWeekNormDau),
-      prevWeekNormDau: Math.round(prevWeekNormDau),
-      q2Submissions: q2All.length,
-      q1Submissions: q1All.length,
+      currentQuarter,
+      prevQuarter,
+      qtdNormDau:       Math.round(qtdNormDau),
+      prevQNormDau:     Math.round(prevQNormDau),
+      thisWeekNormDau:  Math.round(thisWeekNormDau),
+      prevWeekNormDau:  Math.round(prevWeekNormDau),
+      currentQSubmissions: curAll.length,
+      prevQSubmissions:    prevAll.length,
       apacNormDau,
-      q1ApacNormDau,
+      prevQApacNormDau,
     })
   } catch (e) {
     console.error("[kpis]", e)

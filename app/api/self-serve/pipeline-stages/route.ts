@@ -30,6 +30,8 @@ const STAGE_ORDER = [
 const Q1_START = "2026-01-01"
 const Q1_END   = "2026-04-01" // exclusive
 const Q2_START = "2026-04-01"
+const Q3_START = "2026-07-01"
+const Q3_END   = "2026-10-01" // exclusive
 
 const DEAL_PROPS = ["dealstage", "dealname", "normalised_dau__us_dau__tier_1__065"]
 
@@ -71,23 +73,31 @@ function groupByStage(deals: HSDeal[], portalId: string) {
 
 export async function GET() {
   try {
-    const [q2Deals, q1Deals, portalId] = await Promise.all([
-      // Q2: deals created on or after Q2 start
+    const [q2Deals, q1Deals, q3Deals, portalId] = await Promise.all([
+      // Q2: deals that entered New Registration in Q2
       searchDeals(
         [
-          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
-          { propertyName: "createdate", operator: "GTE", value: Q2_START },
+          { propertyName: "pipeline",                             operator: "EQ",  value: PIPELINE },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "GTE", value: Q2_START },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "LT",  value: Q3_START },
         ],
         DEAL_PROPS
       ),
-      // Q1: deals that entered New Registration in Q1 — matches HubSpot's
-      // "Date entered New Registration = last quarter" filter.
-      // Grouped by current stage so the breakdown mirrors the HubSpot pipeline view.
+      // Q1: deals that entered New Registration in Q1
       searchDeals(
         [
-          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: Q1_START },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "LT",  value: Q1_END },
+          { propertyName: "pipeline",                             operator: "EQ",  value: PIPELINE },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "GTE", value: Q1_START },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "LT",  value: Q1_END },
+        ],
+        DEAL_PROPS
+      ),
+      // Q3: deals that entered New Registration in Q3
+      searchDeals(
+        [
+          { propertyName: "pipeline",                             operator: "EQ",  value: PIPELINE },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "GTE", value: Q3_START },
+          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "LT",  value: Q3_END },
         ],
         DEAL_PROPS
       ),
@@ -96,16 +106,20 @@ export async function GET() {
 
     const grouped   = groupByStage(q2Deals, portalId)
     const groupedQ1 = groupByStage(q1Deals, portalId)
+    const groupedQ3 = groupByStage(q3Deals, portalId)
 
     const result = STAGE_ORDER.map((stageId) => ({
       stageId,
       name:      STAGE_MAP[stageId] ?? stageId,
       normDau:   Math.round(grouped[stageId]?.normDau ?? 0),
       normDauQ1: Math.round(groupedQ1[stageId]?.normDau ?? 0),
+      normDauQ3: Math.round(groupedQ3[stageId]?.normDau ?? 0),
       count:     grouped[stageId]?.deals.length ?? 0,
       countQ1:   groupedQ1[stageId]?.deals.length ?? 0,
+      countQ3:   groupedQ3[stageId]?.deals.length ?? 0,
       deals:     grouped[stageId]?.deals ?? [],
       dealsQ1:   groupedQ1[stageId]?.deals ?? [],
+      dealsQ3:   groupedQ3[stageId]?.deals ?? [],
     }))
 
     return NextResponse.json(result)

@@ -54,17 +54,19 @@ const C = {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type KpisData = {
-  qtdNormDau:      number
-  q1NormDau:       number
-  thisWeekNormDau: number
-  prevWeekNormDau: number
-  q2Submissions:   number
-  q1Submissions:   number
-  apacNormDau:     number
-  q1ApacNormDau:   number
+  currentQuarter:      string
+  prevQuarter:         string
+  qtdNormDau:          number
+  prevQNormDau:        number
+  thisWeekNormDau:     number
+  prevWeekNormDau:     number
+  currentQSubmissions: number
+  prevQSubmissions:    number
+  apacNormDau:         number
+  prevQApacNormDau:    number
 }
 type DealInfo  = { id: string; name: string; normDau: number; url: string }
-type StageRow  = { stageId: string; name: string; normDau: number; normDauQ1: number; count: number; countQ1: number; deals: DealInfo[]; dealsQ1: DealInfo[] }
+type StageRow  = { stageId: string; name: string; normDau: number; normDauQ1: number; normDauQ3: number; count: number; countQ1: number; countQ3: number; deals: DealInfo[]; dealsQ1: DealInfo[]; dealsQ3: DealInfo[] }
 type WeekRow     = { week: string; normDau: number; isCurrent: boolean }
 type MonthRow    = { month: string; submissions: number; approved: number; approvalRate: number; isPartial: boolean }
 type AdMobRow       = { month: string; count: number; quarter: "Q1" | "Q2" }
@@ -312,13 +314,13 @@ function KpiCard({
 
 
 // ─── Stage accordion ──────────────────────────────────────────────────────────
-function StageGroup({ stage, quarter }: { stage: StageRow; quarter: "Q1" | "Q2" }) {
+function StageGroup({ stage, quarter }: { stage: StageRow; quarter: "Q1" | "Q2" | "Q3" }) {
   const [open, setOpen] = useState(false)
   const color = STAGE_COLOR[stage.stageId] ?? C.muted
   const isActive = stage.stageId === "107224655" || stage.stageId === "107224657"
-  const displayDau   = quarter === "Q1" ? stage.normDauQ1 : stage.normDau
-  const displayCount = quarter === "Q1" ? stage.countQ1  : stage.count
-  const displayDeals = quarter === "Q1" ? stage.dealsQ1  : stage.deals
+  const displayDau   = quarter === "Q1" ? stage.normDauQ1 : quarter === "Q3" ? stage.normDauQ3 : stage.normDau
+  const displayCount = quarter === "Q1" ? stage.countQ1  : quarter === "Q3" ? stage.countQ3  : stage.count
+  const displayDeals = quarter === "Q1" ? stage.dealsQ1  : quarter === "Q3" ? stage.dealsQ3  : stage.deals
 
   return (
     <div style={{
@@ -589,7 +591,7 @@ export function SelfServeDashboard() {
   const [kpisError,      setKpisError]      = useState(false)
   const [stages,         setStages]         = useState<StageRow[] | null>(null)
   const [stagesError,    setStagesError]    = useState(false)
-  const [stageQuarter,   setStageQuarter]   = useState<"Q1" | "Q2">("Q2")
+  const [stageQuarter,   setStageQuarter]   = useState<"Q1" | "Q2" | "Q3">("Q2")
   const [weekly,         setWeekly]         = useState<WeekRow[] | null>(null)
   const [weeklyError,    setWeeklyError]    = useState(false)
   const [monthly,        setMonthly]        = useState<MonthRow[] | null>(null)
@@ -807,7 +809,7 @@ export function SelfServeDashboard() {
               paddingLeft:"18px",
               letterSpacing: "0.01em",
             }}>
-              Pipeline 52357803 · Q2 2026 · Target 1M Norm DAU
+              Pipeline 52357803 · {kpis?.currentQuarter ?? "…"} · Target 1M Norm DAU
             </p>
           </div>
 
@@ -882,9 +884,9 @@ export function SelfServeDashboard() {
                 progress={kpis.qtdNormDau / qtdTarget}
                 sub={
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
-                    <DeltaChip current={kpis.qtdNormDau} prev={kpis.q1NormDau} label="QoQ" />
+                    <DeltaChip current={kpis.qtdNormDau} prev={kpis.prevQNormDau} label="QoQ" />
                     <span style={{ fontSize: "11px", color: C.muted }}>
-                      vs Q1 {fmtDau(kpis.q1NormDau)}
+                      vs {kpis.prevQuarter} {fmtDau(kpis.prevQNormDau)}
                     </span>
                   </div>
                 }
@@ -896,14 +898,14 @@ export function SelfServeDashboard() {
                 sub={<DeltaChip current={kpis.thisWeekNormDau} prev={kpis.prevWeekNormDau} />}
               />
               <KpiCard
-                label="Q2 Form Submissions"
-                value={kpis.q2Submissions.toString()}
+                label={`${kpis.currentQuarter} Form Submissions`}
+                value={kpis.currentQSubmissions.toString()}
                 Icon={Users}
                 sub={
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
-                    <DeltaChip current={kpis.q2Submissions} prev={kpis.q1Submissions} label="QoQ" />
+                    <DeltaChip current={kpis.currentQSubmissions} prev={kpis.prevQSubmissions} label="QoQ" />
                     <span style={{ fontSize: "11px", color: C.muted }}>
-                      vs Q1 {kpis.q1Submissions}
+                      vs {kpis.prevQuarter} {kpis.prevQSubmissions}
                     </span>
                   </div>
                 }
@@ -917,9 +919,9 @@ export function SelfServeDashboard() {
                 progressTarget="300k"
                 sub={
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
-                    <DeltaChip current={kpis.apacNormDau} prev={kpis.q1ApacNormDau} label="QoQ" />
+                    <DeltaChip current={kpis.apacNormDau} prev={kpis.prevQApacNormDau} label="QoQ" />
                     <span style={{ fontSize: "11px", color: C.muted }}>
-                      vs Q1 {fmtDau(kpis.q1ApacNormDau)}
+                      vs {kpis.prevQuarter} {fmtDau(kpis.prevQApacNormDau)}
                     </span>
                   </div>
                 }
@@ -936,7 +938,7 @@ export function SelfServeDashboard() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
               <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0 }}>Pipeline Stage Breakdown (Norm DAU)</p>
               <div style={{ display: "flex", gap: "4px" }}>
-                {(["Q1", "Q2"] as const).map((q) => (
+                {(["Q1", "Q2", "Q3"] as const).map((q) => (
                   <button
                     key={q}
                     onClick={() => setStageQuarter(q)}

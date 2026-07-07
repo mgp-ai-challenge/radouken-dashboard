@@ -5,18 +5,21 @@ const PIPELINE = "52357803"
 const ACTIVE_STAGES = ["107224655", "107224657"] // Approved + Live
 const WEEKS = 8
 
+const APPROVED_STAGE = "107224655"
+const APPROVED_ENTERED = `hs_v2_date_entered_${APPROVED_STAGE}`
+
 export async function GET() {
   try {
     const eightWeeksAgo = mondayWeeksAgo(WEEKS - 1).toISOString().split("T")[0]
-    const thisWeekStart = currentWeekMonday().toISOString().split("T")[0]
 
+    // Filter by when the deal entered Approved in the last 8 weeks — not createdate,
+    // and no current-stage filter so deals that later moved to Live/Promoted/etc. are included.
     const deals = await searchDeals(
       [
-        { propertyName: "pipeline", operator: "EQ", value: PIPELINE },
-        { propertyName: "dealstage", operator: "IN", values: ACTIVE_STAGES },
-        { propertyName: "createdate", operator: "GTE", value: eightWeeksAgo },
+        { propertyName: "pipeline",       operator: "EQ",  value: PIPELINE },
+        { propertyName: APPROVED_ENTERED, operator: "GTE", value: eightWeeksAgo },
       ],
-      ["createdate", "normalised_dau__us_dau__tier_1__065"]
+      [APPROVED_ENTERED, "normalised_dau__us_dau__tier_1__065"]
     )
 
     // Build week buckets: last 8 ISO weeks
@@ -30,7 +33,7 @@ export async function GET() {
     }
 
     for (const deal of deals) {
-      const d = new Date(deal.properties.createdate ?? "")
+      const d = new Date(deal.properties[APPROVED_ENTERED] ?? "")
       if (isNaN(d.getTime())) continue
       const wk = `W${isoWeek(d)}`
       if (buckets.has(wk)) {
