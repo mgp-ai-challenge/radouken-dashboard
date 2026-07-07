@@ -115,10 +115,11 @@ export async function GET() {
         ],
         ["normalised_dau__us_dau__tier_1__065", "hs_v2_date_entered_107224655"]
       ),
+      // Form fills = deals created this quarter (createdate), not stage entry date
       searchDeals(
         [
-          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: curStart },
+          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+          { propertyName: "createdate", operator: "GTE", value: curStart },
         ],
         ["createdate"]
       ),
@@ -132,11 +133,12 @@ export async function GET() {
         ],
         ["normalised_dau__us_dau__tier_1__065"]
       ),
+      // Previous quarter form fills by createdate
       searchDeals(
         [
-          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: prevStart },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "LT",  value: prevEnd },
+          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+          { propertyName: "createdate", operator: "GTE", value: prevStart },
+          { propertyName: "createdate", operator: "LT",  value: prevEnd },
         ],
         ["createdate"]
       ),

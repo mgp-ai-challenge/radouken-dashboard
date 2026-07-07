@@ -1057,7 +1057,7 @@ export function SelfServeDashboard() {
         {/* ── Row 3: Monthly Submissions ───────────────────────────────────── */}
         <Panel>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-            <SectionLabel>Monthly Submissions — Jan to May 2026</SectionLabel>
+            <SectionLabel>Monthly Submissions — {new Date().getFullYear()} YTD</SectionLabel>
             <div style={{ display: "flex", gap: 16 }}>
               {[{ color: C.blue, label: "Submissions" }, { color: C.accent, label: "Approved" }].map(({ color, label }) => (
                 <div key={label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
