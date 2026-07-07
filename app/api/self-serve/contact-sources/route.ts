@@ -3,8 +3,22 @@ import { searchDeals } from "@/lib/hubspot-deals"
 
 const PIPELINE = "52357803"
 const HS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN!
-const Q1_START = "2026-01-01"
-const Q2_START = "2026-04-01"
+
+function buildQuarters() {
+  const now = new Date()
+  const year = now.getUTCFullYear()
+  const currentQ = Math.floor(now.getUTCMonth() / 3) + 1
+  const pad = (n: number) => String(n).padStart(2, "0")
+  const quarters = []
+  for (let q = 1; q <= currentQ; q++) {
+    const startMonth = (q - 1) * 3 + 1
+    const endMonthRaw = q * 3 + 1
+    const endYear  = endMonthRaw > 12 ? year + 1 : year
+    const endMonth = endMonthRaw > 12 ? 1 : endMonthRaw
+    quarters.push({ label: `Q${q}`, start: `${year}-${pad(startMonth)}-01`, end: `${endYear}-${pad(endMonth)}-01` })
+  }
+  return quarters
+}
 
 const SOURCE_LABELS: Record<string, string> = {
   ORGANIC_SEARCH:  "Organic Search",
@@ -80,65 +94,74 @@ function aggregateBySource(
   return agg
 }
 
+type SourceRow = { source: string; count: number; pct: number; normDau: number; qoqPct: number | null }
+
+function buildRows(
+  deals: Deal[],
+  contactMap: Map<string, string[]>,
+  contactSource: Map<string, string>,
+  prevAgg?: Record<string, { count: number; normDau: number }>
+): SourceRow[] {
+  const agg = aggregateBySource(deals, contactMap, contactSource)
+  const total = deals.length || 1
+  return Object.entries(agg)
+    .map(([key, { count, normDau }]) => {
+      const label = SOURCE_LABELS[key] ?? (key === "UNKNOWN" ? "Unknown" : key)
+      const prevNormDau = prevAgg?.[key]?.normDau ?? 0
+      const qoqPct = prevNormDau > 0
+        ? Math.round(((normDau - prevNormDau) / prevNormDau) * 100)
+        : null
+      return { source: label, count, pct: Math.round((count / total) * 100), normDau: Math.round(normDau), qoqPct }
+    })
+    .sort((a, b) => b.normDau - a.normDau)
+}
+
 export async function GET() {
   try {
-    const [q2Deals, q1Deals] = await Promise.all([
-      searchDeals(
-        [
-          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
-          { propertyName: "createdate", operator: "GTE", value: Q2_START },
-        ],
-        ["normalised_dau__us_dau__tier_1__065"]
-      ),
-      searchDeals(
-        [
-          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
-          { propertyName: "createdate", operator: "GTE", value: Q1_START },
-          { propertyName: "createdate", operator: "LT",  value: Q2_START },
-        ],
-        ["normalised_dau__us_dau__tier_1__065"]
-      ),
+    const quarters = buildQuarters()
+
+    // Fetch deals per quarter — no stage filter so all deals (Approved, Promoted, transferred to AMs, etc.) are included
+    const allQuarterDeals = await Promise.all(
+      quarters.map(({ start, end }) =>
+        searchDeals(
+          [
+            { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+            { propertyName: "createdate", operator: "GTE", value: start },
+            { propertyName: "createdate", operator: "LT",  value: end },
+          ],
+          ["normalised_dau__us_dau__tier_1__065"]
+        )
+      )
+    )
+
+    const ytdDeals = allQuarterDeals.flat()
+    if (ytdDeals.length === 0) return NextResponse.json({})
+
+    // Fetch associations per quarter + ytd in parallel
+    const [allContactMaps, ytdContactMap] = await Promise.all([
+      Promise.all(allQuarterDeals.map(getDealContactMap)),
+      getDealContactMap(ytdDeals),
     ])
 
-    if (q2Deals.length === 0) return NextResponse.json([])
-
-    // Fetch contact associations for both quarters in parallel
-    const [q2ContactMap, q1ContactMap] = await Promise.all([
-      getDealContactMap(q2Deals),
-      getDealContactMap(q1Deals),
-    ])
-
-    // Collect all unique contact IDs across both quarters
-    const allContactIds = Array.from(new Set([
-      ...Array.from(q2ContactMap.values()).flat(),
-      ...Array.from(q1ContactMap.values()).flat(),
-    ]))
-
+    // One batch fetch of all contact sources
+    const allContactIds = Array.from(new Set(Array.from(ytdContactMap.values()).flat()))
     const contactSource = await getContactSources(allContactIds)
 
-    const q2Agg = aggregateBySource(q2Deals, q2ContactMap, contactSource)
-    const q1Agg = aggregateBySource(q1Deals, q1ContactMap, contactSource)
+    // Per-quarter raw aggregations (for QoQ reference between quarters)
+    const perQuarterAgg = allQuarterDeals.map((deals, i) =>
+      aggregateBySource(deals, allContactMaps[i], contactSource)
+    )
 
-    const totalQ2 = q2Deals.length
-
-    // Build result using Q2 sources, add QoQ comparison
-    const result = Object.entries(q2Agg)
-      .map(([key, { count, normDau }]) => {
-        const label = SOURCE_LABELS[key] ?? (key === "UNKNOWN" ? "Unknown" : key)
-        const q1NormDau = q1Agg[key]?.normDau ?? 0
-        const qoqPct = q1NormDau > 0
-          ? Math.round(((normDau - q1NormDau) / q1NormDau) * 100)
-          : null
-        return {
-          source:     label,
-          count,
-          pct:        Math.round((count / totalQ2) * 100),
-          normDau:    Math.round(normDau),
-          q1NormDau:  Math.round(q1NormDau),
-          qoqPct,
-        }
-      })
-      .sort((a, b) => b.normDau - a.normDau)
+    const result: Record<string, SourceRow[]> = {}
+    for (let i = 0; i < quarters.length; i++) {
+      result[quarters[i].label] = buildRows(
+        allQuarterDeals[i],
+        allContactMaps[i],
+        contactSource,
+        i > 0 ? perQuarterAgg[i - 1] : undefined
+      )
+    }
+    result.ytd = buildRows(ytdDeals, ytdContactMap, contactSource)
 
     return NextResponse.json(result)
   } catch (e) {

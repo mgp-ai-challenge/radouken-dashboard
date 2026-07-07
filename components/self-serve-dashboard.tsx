@@ -74,7 +74,8 @@ type AdMob2025Deal  = { id: string; name: string; normDau: number; signupDate: s
 type IronSourceDeal = { id: string; name: string; normDau: number; stage: string; stageId: string; createDate: string; url: string }
 type EmailSplitRow = { quarter: string; business: number; free: number; unknown: number }
 type EmailSplit    = EmailSplitRow[]
-type SourceRow = { source: string; count: number; pct: number; normDau: number; q1NormDau: number; qoqPct: number | null }
+type SourceRow  = { source: string; count: number; pct: number; normDau: number; qoqPct: number | null }
+type SourceData = Record<string, SourceRow[]>
 
 type WeeklyReportData = {
   generatedAt: string
@@ -583,6 +584,55 @@ function ErrorBanner({ children }: { children: React.ReactNode }) {
   )
 }
 
+// ─── Source table ─────────────────────────────────────────────────────────────
+function SourceTable({ rows, error, showQoQ }: { rows: SourceRow[] | null; error: boolean; showQoQ: boolean }) {
+  const BAR_COLORS = [C.accent, C.blue, C.amber, C.purple, C.red, C.muted]
+  if (error) return <DataError label="contact sources" />
+  if (rows === null) return <LoadingSkeleton h={180} />
+  if (rows.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: "24px 0", textAlign: "center" }}>No data</p>
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
+        <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Source</span>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 48, textAlign: "right" }}>Norm DAU</span>
+          {showQoQ && <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 36, textAlign: "right" }}>QoQ</span>}
+          <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 44, textAlign: "right" }}>Deals</span>
+        </div>
+      </div>
+      {rows.map((row, i) => {
+        const color = BAR_COLORS[i % BAR_COLORS.length]
+        const qoqPositive = row.qoqPct !== null && row.qoqPct >= 0
+        return (
+          <div key={row.source}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+              <span style={{ fontSize: 11, color: C.sage }}>{row.source}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                <span style={{ fontSize: 11, color: C.sageLight, fontFamily: MONO, fontWeight: 600, minWidth: 48, textAlign: "right" }}>
+                  {fmtNum(row.normDau ?? 0)}
+                </span>
+                {showQoQ && (
+                  <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 500, minWidth: 36, textAlign: "right",
+                    color: row.qoqPct === null ? C.muted : qoqPositive ? C.accent : C.red,
+                  }}>
+                    {row.qoqPct === null ? "—" : `${qoqPositive ? "+" : ""}${row.qoqPct}%`}
+                  </span>
+                )}
+                <span style={{ fontSize: 10, color: C.muted, fontFamily: MONO, minWidth: 44, textAlign: "right" }}>
+                  {row.count}
+                </span>
+              </div>
+            </div>
+            <div style={{ height: 4, borderRadius: 2, background: C.border }}>
+              <div style={{ height: "100%", borderRadius: 2, background: color, width: `${row.pct}%`, transition: "width 0.4s ease" }} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export function SelfServeDashboard() {
   const [kpis,           setKpis]           = useState<KpisData | null>(null)
@@ -635,8 +685,9 @@ export function SelfServeDashboard() {
 
   const [emailSplit,     setEmailSplit]     = useState<EmailSplit | null>(null)
   const [emailSplitError,setEmailSplitError]= useState(false)
-  const [sources,        setSources]        = useState<SourceRow[] | null>(null)
+  const [sources,        setSources]        = useState<SourceData | null>(null)
   const [sourcesError,   setSourcesError]   = useState(false)
+  const [sourcesQuarter, setSourcesQuarter] = useState<string>("Q3")
   const [lastUpdated,    setLastUpdated]    = useState<Date | null>(null)
   const [refreshing,     setRefreshing]     = useState(false)
   const [weeklyReport,      setWeeklyReport]      = useState<WeeklyReportData>(undefined as unknown as WeeklyReportData)
@@ -1364,55 +1415,40 @@ export function SelfServeDashboard() {
 
         {/* ── Row 5: Contact Sources ───────────────────────────────────────── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+
+          {/* Quarter tabs panel */}
           <Panel>
-            <SectionLabel>Last Touch Source — Q2 QTD</SectionLabel>
-            {sourcesError ? (
-              <DataError label="contact sources" />
-            ) : !sources ? (
-              <LoadingSkeleton h={180} />
-            ) : sources.length === 0 ? (
-              <p style={{ fontSize: 12, color: C.muted, padding: "24px 0", textAlign: "center" }}>No data</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 4 }}>
-                {/* Column headers */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
-                  <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Source</span>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 48, textAlign: "right" }}>Norm DAU</span>
-                    <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 36, textAlign: "right" }}>QoQ</span>
-                    <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 44, textAlign: "right" }}>Deals</span>
-                  </div>
-                </div>
-                {sources.map((row, i) => {
-                  const barColors = [C.accent, C.blue, C.amber, C.purple, C.red, C.muted]
-                  const color = barColors[i % barColors.length]
-                  const qoqPositive = row.qoqPct !== null && row.qoqPct >= 0
-                  return (
-                    <div key={row.source}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, color: C.sage }}>{row.source}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                          <span style={{ fontSize: 11, color: C.sageLight, fontFamily: MONO, fontWeight: 600, minWidth: 48, textAlign: "right" }}>
-                            {fmtNum(row.normDau ?? 0)}
-                          </span>
-                          <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 500, minWidth: 36, textAlign: "right",
-                            color: row.qoqPct === null ? C.muted : qoqPositive ? C.accent : C.red,
-                          }}>
-                            {row.qoqPct === null ? "—" : `${qoqPositive ? "+" : ""}${row.qoqPct}%`}
-                          </span>
-                          <span style={{ fontSize: 10, color: C.muted, fontFamily: MONO, minWidth: 44, textAlign: "right" }}>
-                            {row.count}
-                          </span>
-                        </div>
-                      </div>
-                      <div style={{ height: 4, borderRadius: 2, background: C.border }}>
-                        <div style={{ height: "100%", borderRadius: 2, background: color, width: `${row.pct}%`, transition: "width 0.4s ease" }} />
-                      </div>
-                    </div>
-                  )
-                })}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0 }}>
+                Last Touch Source
+              </p>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {(sources ? Object.keys(sources).filter(k => k !== "ytd") : ["Q1","Q2","Q3"]).map((q) => (
+                  <button
+                    key={q}
+                    onClick={() => setSourcesQuarter(q)}
+                    style={{
+                      padding: "2px 10px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, cursor: "pointer",
+                      border:     `1px solid ${sourcesQuarter === q ? C.accent : C.border}`,
+                      background: sourcesQuarter === q ? C.accentDim : "transparent",
+                      color:      sourcesQuarter === q ? C.accent : C.muted,
+                      letterSpacing: "0.03em",
+                    }}
+                  >
+                    {q} 2026
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
+            <SourceTable rows={sourcesError ? null : sources?.[sourcesQuarter] ?? (sources ? [] : null)} error={sourcesError} showQoQ />
+          </Panel>
+
+          {/* YTD panel */}
+          <Panel>
+            <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0, marginBottom: 14 }}>
+              Last Touch Source — {new Date().getFullYear()} YTD
+            </p>
+            <SourceTable rows={sourcesError ? null : sources?.ytd ?? (sources ? [] : null)} error={sourcesError} showQoQ={false} />
           </Panel>
         </div>
 
