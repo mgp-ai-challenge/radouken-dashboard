@@ -196,7 +196,7 @@ export async function searchAppsByCategory(
   store: "ios" | "android",
 ): Promise<STAppSummary[]> {
   const today = new Date().toISOString().slice(0, 10)
-  const deviceParam = store === "ios" ? "&device=iphone" : "&device="
+  const deviceParam = store === "ios" ? "&device=iphone" : ""
   const path = `/v1/${store}/category_rankings?category=${encodeURIComponent(category)}&country=US&date=${today}${deviceParam}&limit=250`
 
   const data = await stFetch(path) as { data: { free: STRankingApp[]; paid: STRankingApp[] } }
@@ -237,19 +237,20 @@ export async function getAppDAU(
 ): Promise<number | null> {
   if (store === "android") return null
   try {
-    const today = new Date()
-    const todayStr = today.toISOString().slice(0, 10)
-    const thirtyDaysAgo = new Date(today)
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-    const startStr = thirtyDaysAgo.toISOString().slice(0, 10)
+    const end = new Date()
+    end.setDate(end.getDate() - 1)   // yesterday — ST lags 1-2 days
+    const start = new Date(end)
+    start.setDate(start.getDate() - 30)
+    const endStr = end.toISOString().slice(0, 10)
+    const startStr = start.toISOString().slice(0, 10)
 
     const data = await stFetch(
-      `/v1/ios/usage/active_users?app_ids=${encodeURIComponent(appId)}&start_date=${startStr}&end_date=${todayStr}&country=US`
+      `/v1/ios/usage/active_users?app_ids=${encodeURIComponent(appId)}&start_date=${startStr}&end_date=${endStr}&country=US`
     ) as Array<{ date: string; iphone_users: number; ipad_users: number }>
 
     if (!Array.isArray(data) || data.length === 0) return null
     const total = data.reduce((sum, row) => sum + (row.iphone_users ?? 0) + (row.ipad_users ?? 0), 0)
-    return total / data.length
+    return data.length > 0 ? total / 30 : null
   } catch {
     return null
   }
