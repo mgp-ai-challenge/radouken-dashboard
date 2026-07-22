@@ -161,3 +161,39 @@ export async function fetchAllLeads(campaignId: string): Promise<LemlistLead[]> 
 
   return results
 }
+
+export interface LemlistLeadWithState {
+  email: string
+  companyName: string | null
+  state: string   // raw Lemlist state, e.g. "emailReplied", "emailClicked", etc.
+  sentAt: string | null
+}
+
+// Like fetchAllLeads but returns the raw state field for engagement scoring.
+// Does NOT filter by sentAt — returns all leads including unsent.
+export async function fetchLeadsWithState(campaignId: string): Promise<LemlistLeadWithState[]> {
+  const results: LemlistLeadWithState[] = []
+  const limit = 100
+  let offset = 0
+
+  while (true) {
+    const data = await llFetch(`/campaigns/${campaignId}/leads?limit=${limit}&offset=${offset}`)
+    const page = data as Array<Record<string, unknown>>
+    if (!Array.isArray(page) || page.length === 0) break
+
+    for (const l of page) {
+      results.push({
+        email:       String(l.email ?? ""),
+        companyName: l.companyName ? String(l.companyName) : null,
+        state:       String(l.state ?? ""),
+        sentAt:      l.sentAt ? String(l.sentAt) : null,
+      })
+    }
+
+    if (page.length < limit) break
+    offset += limit
+    await new Promise((r) => setTimeout(r, 100))
+  }
+
+  return results
+}

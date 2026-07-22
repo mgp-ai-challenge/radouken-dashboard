@@ -1,4 +1,5 @@
 // lib/icp-sourcing.ts
+import { fetchAllCampaigns, fetchLeadsWithState, TARGET_CAMPAIGNS } from "./lemlist"
 
 export type Vertical = "iap-gaming" | "igaming" | "ecommerce" | "prediction-markets" | "ctv"
 export type EngagementTier = "replied" | "interested" | "clicked" | "opened" | "contacted" | null
@@ -116,4 +117,115 @@ export function deriveRecommendedAction(
   if (mmpDetected === "unknown") return "manual-verify-mmp"
   if (lemlistEngagement !== null) return "warm-re-approach"
   return "cold-outreach"
+}
+
+// ─── Lemlist engagement index ─────────────────────────────────────────────────
+
+interface DomainEngagement {
+  tier: EngagementTier
+  lastContactedAt: string | null
+}
+
+function stateToEngagementTier(state: string): EngagementTier {
+  const s = state.toLowerCase()
+  if (s.includes("replied") || s.includes("reply")) return "replied"
+  if (s.includes("interested"))                        return "interested"
+  if (s.includes("click"))                             return "clicked"
+  if (s.includes("open"))                              return "opened"
+  if (s.includes("sent") || s.includes("contacted"))  return "contacted"
+  return null
+}
+
+function extractDomain(email: string): string | null {
+  const parts = email.split("@")
+  return parts.length === 2 && parts[1] ? parts[1].toLowerCase() : null
+}
+
+// Builds a domain → engagement map by scanning all TARGET_CAMPAIGNS leads.
+// Call once at the start of runVerticalPipeline and pass the result downstream.
+export async function buildLemlistEngagementIndex(): Promise<Map<string, DomainEngagement>> {
+  const index = new Map<string, DomainEngagement>()
+
+  let allCampaigns: Array<{ _id: string; name: string }>
+  try {
+    allCampaigns = await fetchAllCampaigns()
+  } catch {
+    console.warn("[icp-sourcing] Lemlist campaign fetch failed — engagement will be null for all candidates")
+    return index
+  }
+
+  const targetIds = TARGET_CAMPAIGNS
+    .map(({ match }) => allCampaigns.find((c) => c.name.includes(match))?._id)
+    .filter(Boolean) as string[]
+
+  for (const campaignId of targetIds) {
+    let leads: Awaited<ReturnType<typeof fetchLeadsWithState>>
+    try {
+      leads = await fetchLeadsWithState(campaignId)
+    } catch {
+      console.warn(`[icp-sourcing] Lemlist leads fetch failed for campaign ${campaignId}`)
+      continue
+    }
+
+    for (const lead of leads) {
+      const domain = extractDomain(lead.email)
+      if (!domain) continue
+
+      const tier = stateToEngagementTier(lead.state)
+      const existing = index.get(domain)
+
+      // Keep the highest-weight engagement for this domain
+      const existingWeight = existing?.tier ? (ENGAGEMENT_WEIGHT[existing.tier] ?? 0) : 0
+      const newWeight = tier ? (ENGAGEMENT_WEIGHT[tier] ?? 0) : 0
+
+      if (!existing || newWeight > existingWeight) {
+        index.set(domain, {
+          tier,
+          lastContactedAt: lead.sentAt ?? null,
+        })
+      }
+    }
+  }
+
+  return index
+}
+
+// ─── HubSpot customer check ───────────────────────────────────────────────────
+
+const HS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN
+
+// Returns true if the domain belongs to an existing HubSpot customer.
+// On API failure, returns false (conservative: don't exclude on error).
+export async function isCustomerDomain(domain: string): Promise<boolean> {
+  if (!HS_TOKEN) return false
+  try {
+    const body = {
+      filterGroups: [{
+        filters: [
+          { propertyName: "domain", operator: "EQ", value: domain },
+          { propertyName: "lifecyclestage", operator: "EQ", value: "customer" },
+        ],
+      }],
+      properties: ["domain", "lifecyclestage"],
+      limit: 1,
+    }
+    const res = await fetch("https://api.hubapi.com/crm/v3/objects/companies/search", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${HS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      cache: "no-store",
+    })
+    if (!res.ok) {
+      console.warn(`[icp-sourcing] HubSpot customer check failed for ${domain}: ${res.status}`)
+      return false
+    }
+    const data = await res.json()
+    return (data.total ?? 0) > 0
+  } catch (e) {
+    console.warn(`[icp-sourcing] HubSpot customer check threw for ${domain}:`, e)
+    return false
+  }
 }
