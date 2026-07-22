@@ -48,7 +48,9 @@ async function stFetch(path: string): Promise<unknown> {
   })
   if (!res.ok) {
     const body = await res.text().catch(() => "")
-    throw new Error(`SensorTower ${path} → ${res.status}${body ? `: ${body.slice(0, 200)}` : ""}`)
+    const err = new Error(`SensorTower ${path} → ${res.status}${body ? `: ${body.slice(0, 200)}` : ""}`) as Error & { status: number }
+    err.status = res.status
+    throw err
   }
   return res.json()
 }
@@ -167,4 +169,113 @@ export async function enrichCompany(companyId: string, name: string): Promise<Ap
 
   _cache.set(cacheKey, { ts: Date.now(), data: result })
   return result
+}
+
+// ─── ICP Sourcing helpers ─────────────────────────────────────────────────────
+
+// Re-declared here to avoid a circular import (icp-sourcing.ts imports from this file).
+type MMPDetected = "appsflyer" | "adjust" | "both" | "none" | "unknown"
+
+export interface STAppSummary {
+  appId: string
+  appName: string
+  publisherName: string
+  publisherDomain: string | null  // from website_url field (may be null)
+  store: "ios" | "android"
+  storeUrl: string
+}
+
+interface STRankingApp {
+  app_id: string | number
+  name: string
+  publisher_name: string
+}
+
+export async function searchAppsByCategory(
+  category: string,
+  store: "ios" | "android",
+): Promise<STAppSummary[]> {
+  const today = new Date().toISOString().slice(0, 10)
+  const deviceParam = store === "ios" ? "&device=iphone" : "&device="
+  const path = `/v1/${store}/category_rankings?category=${encodeURIComponent(category)}&country=US&date=${today}${deviceParam}&limit=250`
+
+  const data = await stFetch(path) as { data: { free: STRankingApp[]; paid: STRankingApp[] } }
+
+  const free: STRankingApp[] = data.data?.free ?? []
+  const paid: STRankingApp[] = data.data?.paid ?? []
+
+  // Combine and deduplicate by app_id
+  const seen = new Set<string>()
+  const results: STAppSummary[] = []
+  for (const app of [...free, ...paid]) {
+    const id = String(app.app_id)
+    if (seen.has(id)) continue
+    seen.add(id)
+    results.push({
+      appId: id,
+      appName: app.name,
+      publisherName: app.publisher_name,
+      publisherDomain: null,
+      store,
+      storeUrl: buildStoreUrl(app.app_id, store),
+    })
+  }
+  return results
+}
+
+export async function checkSDKDetection(
+  _appId: string,
+  _store: "ios" | "android",
+): Promise<MMPDetected> {
+  // SDK detection returns 404 on this account plan — always return "unknown".
+  return "unknown"
+}
+
+export async function getAppDAU(
+  appId: string,
+  store: "ios" | "android",
+): Promise<number | null> {
+  if (store === "android") return null
+  try {
+    const today = new Date()
+    const todayStr = today.toISOString().slice(0, 10)
+    const thirtyDaysAgo = new Date(today)
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const startStr = thirtyDaysAgo.toISOString().slice(0, 10)
+
+    const data = await stFetch(
+      `/v1/ios/usage/active_users?app_ids=${encodeURIComponent(appId)}&start_date=${startStr}&end_date=${todayStr}&country=US`
+    ) as Array<{ date: string; iphone_users: number; ipad_users: number }>
+
+    if (!Array.isArray(data) || data.length === 0) return null
+    const total = data.reduce((sum, row) => sum + (row.iphone_users ?? 0) + (row.ipad_users ?? 0), 0)
+    return total / data.length
+  } catch {
+    return null
+  }
+}
+
+export async function getAppRevenue(
+  appId: string,
+  store: "ios" | "android",
+): Promise<{ monthlyDownloads: number | null }> {
+  try {
+    const today = new Date()
+    const todayStr = today.toISOString().slice(0, 10)
+    const thirtyDaysAgo = new Date(today)
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const startStr = thirtyDaysAgo.toISOString().slice(0, 10)
+
+    const data = await stFetch(
+      `/v1/${store}/sales_report_estimates?app_ids=${encodeURIComponent(appId)}&start_date=${startStr}&end_date=${todayStr}&countries=US`
+    ) as Array<{ cc: string; iu?: number; au?: number }>
+
+    if (!Array.isArray(data) || data.length === 0) return { monthlyDownloads: null }
+    const usEntries = data.filter((row) => row.cc === "US")
+    if (usEntries.length === 0) return { monthlyDownloads: null }
+    const total = usEntries.reduce((sum, row) => sum + (row.iu ?? 0) + (row.au ?? 0), 0)
+    return { monthlyDownloads: total }
+  } catch {
+    return { monthlyDownloads: null }
+  }
 }
