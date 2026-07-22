@@ -271,28 +271,45 @@ export async function runVerticalPipeline(
         const key = `${app.store}:${app.appId}`
         if (!seen.has(key)) { seen.add(key); allApps.push(app) }
       }
+    } else {
+      console.warn("[icp-sourcing] category fetch failed:", r.reason)
     }
   }
 
   // 2. Build Lemlist index
-  const engagementIndex = await buildLemlistEngagementIndex()
+  let engagementIndex: Map<string, DomainEngagement>
+  try {
+    engagementIndex = await buildLemlistEngagementIndex()
+  } catch (err) {
+    console.warn("[icp-sourcing] Lemlist index build failed, engagement will be null:", err)
+    engagementIndex = new Map()
+  }
 
   // 3. Enrich each app (concurrency=5)
   const enrichApp = async (app: STAppSummary): Promise<ICPCandidate | null> => {
     const mmpDetected = await checkSDKDetection(app.appId, app.store)
     if (mmpDetected === "none") return null
 
-    const [stEstimatedUSDAU, revenueResult] = await Promise.all([
-      config.fetchDAU ? getAppDAU(app.appId, app.store) : Promise.resolve(null),
-      config.fetchRevenue ? getAppRevenue(app.appId, app.store) : Promise.resolve(null),
-    ])
-    const stMonthlyDownloads = revenueResult?.monthlyDownloads ?? null
+    let stEstimatedUSDAU: number | null = null
+    let stMonthlyDownloads: number | null = null
+    try {
+      const [dauResult, revenueResult] = await Promise.all([
+        config.fetchDAU ? getAppDAU(app.appId, app.store) : Promise.resolve(null),
+        config.fetchRevenue ? getAppRevenue(app.appId, app.store) : Promise.resolve(null),
+      ])
+      stEstimatedUSDAU = dauResult
+      stMonthlyDownloads = revenueResult?.monthlyDownloads ?? null
+    } catch (err) {
+      console.warn("[icp-sourcing] enrichment fetch failed for", app.appId, err)
+    }
 
     if (config.dauGate !== null && stEstimatedUSDAU !== null && stEstimatedUSDAU < config.dauGate) return null
     if (config.downloadsGate !== null && stMonthlyDownloads !== null && stMonthlyDownloads < config.downloadsGate) return null
 
-    const isCustomer = await isCustomerDomain(app.publisherDomain ?? app.publisherName)
-    if (isCustomer) return null
+    if (app.publisherDomain) {
+      const isCustomer = await isCustomerDomain(app.publisherDomain)
+      if (isCustomer) return null
+    }
 
     const engagementKey = app.publisherDomain
     const engagement = engagementKey ? engagementIndex.get(engagementKey) ?? null : null
