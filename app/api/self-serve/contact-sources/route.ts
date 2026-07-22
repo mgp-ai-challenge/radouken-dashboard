@@ -3,6 +3,8 @@ import { searchDeals } from "@/lib/hubspot-deals"
 
 const PIPELINE = "52357803"
 const SALES_PIPELINES = ["961280", "145970019"] // Supply Sales & AM, UA Sales & AM
+// Only include self-serve deals that have progressed past review (exclude New Registration, Under Review, Denied, etc.)
+const ACTIVE_STAGES = ["107224655", "107224657", "1275149844", "107224658"] // Approved, Live, AdMob/GAM, Promoted
 const HS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN!
 
 function buildQuarters() {
@@ -218,6 +220,7 @@ export async function GET() {
           searchDeals(
             [
               { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+              { propertyName: "dealstage",  operator: "IN",  values: ACTIVE_STAGES },
               { propertyName: "createdate", operator: "GTE", value: start },
               { propertyName: "createdate", operator: "LT",  value: end },
             ],
