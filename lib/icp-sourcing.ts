@@ -1,5 +1,7 @@
 // lib/icp-sourcing.ts
 import { fetchAllCampaigns, fetchLeadsWithState, TARGET_CAMPAIGNS } from "./lemlist"
+import { searchAppsByCategory, checkSDKDetection, getAppDAU, getAppRevenue } from "./sensortower"
+import type { STAppSummary } from "./sensortower"
 
 export type Vertical = "iap-gaming" | "igaming" | "ecommerce" | "prediction-markets" | "ctv"
 export type EngagementTier = "replied" | "interested" | "clicked" | "opened" | "contacted" | null
@@ -228,4 +230,95 @@ export async function isCustomerDomain(domain: string): Promise<boolean> {
     console.warn(`[icp-sourcing] HubSpot customer check threw for ${domain}:`, e)
     return false
   }
+}
+
+// ─── Concurrency helper ───────────────────────────────────────────────────────
+
+async function withConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length)
+  let next = 0
+  async function worker() {
+    while (next < tasks.length) {
+      const i = next++
+      results[i] = await tasks[i]()
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()))
+  return results
+}
+
+// ─── Vertical pipeline ────────────────────────────────────────────────────────
+
+export async function runVerticalPipeline(
+  vertical: Exclude<Vertical, "ctv">,
+): Promise<ICPCandidate[]> {
+  const config = VERTICAL_CONFIGS[vertical]
+
+  // 1. Fetch all apps across categories and stores
+  const categoryFetches = [
+    ...config.iosCategories.map(cat => () => searchAppsByCategory(cat, "ios")),
+    ...config.androidCategories.map(cat => () => searchAppsByCategory(cat, "android")),
+  ]
+  const categoryResults = await Promise.allSettled(categoryFetches.map(f => f()))
+  const allApps: STAppSummary[] = []
+  const seen = new Set<string>()
+  for (const r of categoryResults) {
+    if (r.status === "fulfilled") {
+      for (const app of r.value) {
+        const key = `${app.store}:${app.appId}`
+        if (!seen.has(key)) { seen.add(key); allApps.push(app) }
+      }
+    }
+  }
+
+  // 2. Build Lemlist index
+  const engagementIndex = await buildLemlistEngagementIndex()
+
+  // 3. Enrich each app (concurrency=5)
+  const enrichApp = async (app: STAppSummary): Promise<ICPCandidate | null> => {
+    const mmpDetected = await checkSDKDetection(app.appId, app.store)
+    if (mmpDetected === "none") return null
+
+    const [stEstimatedUSDAU, revenueResult] = await Promise.all([
+      config.fetchDAU ? getAppDAU(app.appId, app.store) : Promise.resolve(null),
+      config.fetchRevenue ? getAppRevenue(app.appId, app.store) : Promise.resolve(null),
+    ])
+    const stMonthlyDownloads = revenueResult?.monthlyDownloads ?? null
+
+    if (config.dauGate !== null && stEstimatedUSDAU !== null && stEstimatedUSDAU < config.dauGate) return null
+    if (config.downloadsGate !== null && stMonthlyDownloads !== null && stMonthlyDownloads < config.downloadsGate) return null
+
+    const isCustomer = await isCustomerDomain(app.publisherDomain ?? app.publisherName)
+    if (isCustomer) return null
+
+    const engagementKey = app.publisherDomain
+    const engagement = engagementKey ? engagementIndex.get(engagementKey) ?? null : null
+
+    return {
+      appId: app.appId,
+      appName: app.appName,
+      publisherName: app.publisherName,
+      publisherDomain: app.publisherDomain,
+      vertical,
+      store: app.store,
+      stEstimatedUSDAU,
+      stMonthlyDownloads,
+      mmpDetected,
+      isExistingBMPublisher: false,
+      lemlistEngagement: engagement?.tier ?? null,
+      lastContactedAt: engagement?.lastContactedAt ?? null,
+      recommendedAction: deriveRecommendedAction(mmpDetected, engagement?.tier ?? null),
+      storeUrl: app.storeUrl,
+    }
+  }
+
+  const tasks = allApps.map(app => () => enrichApp(app))
+  const enriched = await withConcurrency(tasks, 5)
+
+  // 4. Filter nulls and sort
+  const candidates = enriched.filter((c): c is ICPCandidate => c !== null)
+  return candidates.sort((a, b) => scoreCandidate(b) - scoreCandidate(a))
 }
