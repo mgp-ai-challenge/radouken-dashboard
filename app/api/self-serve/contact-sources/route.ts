@@ -84,9 +84,16 @@ async function getContactSources(contactIds: string[]): Promise<Map<string, stri
     const data = await res.json()
     for (const c of data.results ?? []) {
       const p = c.properties ?? {}
-      // Prefer hs_analytics_last_source, then hs_latest_source, then hs_analytics_source.
-      // Skip OFFLINE (manually imported) — for self-serve contacts imported from lists,
-      // hs_latest_source reflects the actual web visit source (Organic Search, Referral, etc.)
+      // Paid Search wins if it appears in ANY source field — publishers who first
+      // arrived via Google Ads but later returned organically would otherwise lose
+      // Paid Search credit when hs_analytics_last_source is overwritten.
+      const allSources = [p.hs_analytics_source, p.hs_analytics_last_source, p.hs_latest_source]
+      if (allSources.some((s) => s === "PAID_SEARCH")) {
+        map.set(c.id, "PAID_SEARCH")
+        continue
+      }
+      // For all other sources: prefer last_source, then latest_source, then source.
+      // Skip OFFLINE (manually imported contacts).
       const candidates = [p.hs_analytics_last_source, p.hs_latest_source, p.hs_analytics_source]
       const src = candidates.find((s) => s && s !== "OFFLINE") ?? "UNKNOWN"
       map.set(c.id, src)
