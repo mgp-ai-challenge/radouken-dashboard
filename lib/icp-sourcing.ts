@@ -121,7 +121,7 @@ export function deriveRecommendedAction(
 
 // ─── Lemlist engagement index ─────────────────────────────────────────────────
 
-interface DomainEngagement {
+export interface DomainEngagement {
   tier: EngagementTier
   lastContactedAt: string | null
 }
@@ -178,7 +178,7 @@ export async function buildLemlistEngagementIndex(): Promise<Map<string, DomainE
       const existingWeight = existing?.tier ? (ENGAGEMENT_WEIGHT[existing.tier] ?? 0) : 0
       const newWeight = tier ? (ENGAGEMENT_WEIGHT[tier] ?? 0) : 0
 
-      if (!existing || newWeight > existingWeight) {
+      if (!existing || newWeight > existingWeight || (newWeight === existingWeight && (lead.sentAt ?? "") > (existing.lastContactedAt ?? ""))) {
         index.set(domain, {
           tier,
           lastContactedAt: lead.sentAt ?? null,
