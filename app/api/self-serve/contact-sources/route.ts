@@ -21,6 +21,16 @@ function buildQuarters() {
   return quarters
 }
 
+async function getPortalId(): Promise<string> {
+  const res = await fetch("https://api.hubapi.com/account-info/v3/details", {
+    headers: { Authorization: `Bearer ${HS_TOKEN}` },
+    cache: "no-store",
+  })
+  if (!res.ok) return "0"
+  const data = await res.json()
+  return String(data.portalId ?? "0")
+}
+
 const SOURCE_LABELS: Record<string, string> = {
   ORGANIC_SEARCH:  "Organic Search",
   PAID_SEARCH:     "Paid Search",
@@ -36,6 +46,7 @@ const SOURCE_LABELS: Record<string, string> = {
 }
 
 type Deal = { id: string; properties: Record<string, string | null> }
+type DealInfo = { id: string; name: string; normDau: number; url: string }
 
 async function getDealContactMap(deals: Deal[]): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>()
@@ -63,24 +74,28 @@ async function getContactSources(contactIds: string[]): Promise<Map<string, stri
     const res = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/batch/read", {
       method: "POST",
       headers: { Authorization: `Bearer ${HS_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ inputs: chunk.map((id) => ({ id })), properties: ["hs_analytics_last_source", "hs_analytics_source"] }),
+      body: JSON.stringify({
+        inputs: chunk.map((id) => ({ id })),
+        properties: ["hs_analytics_last_source", "hs_analytics_source", "hs_latest_source"],
+      }),
       cache: "no-store",
     })
     if (!res.ok) continue
     const data = await res.json()
     for (const c of data.results ?? []) {
-      const src = c.properties?.hs_analytics_last_source
-        || c.properties?.hs_analytics_source
-        || "UNKNOWN"
+      const p = c.properties ?? {}
+      // Prefer hs_analytics_last_source, then hs_latest_source, then hs_analytics_source.
+      // Skip OFFLINE (manually imported) — for self-serve contacts imported from lists,
+      // hs_latest_source reflects the actual web visit source (Organic Search, Referral, etc.)
+      const candidates = [p.hs_analytics_last_source, p.hs_latest_source, p.hs_analytics_source]
+      const src = candidates.find((s) => s && s !== "OFFLINE") ?? "UNKNOWN"
       map.set(c.id, src)
     }
   }
   return map
 }
 
-// Fetch all "requests Bidmachine" deals from the sales pipelines.
-// These include both deals created directly in sales and transferred sign-up deals that kept their name.
-async function fetchSalesBidmachineDeals(): Promise<Deal[]> {
+async function fetchSalesTransferredDeals(): Promise<Deal[]> {
   const deals: Deal[] = []
   let after: string | undefined
   do {
@@ -88,7 +103,7 @@ async function fetchSalesBidmachineDeals(): Promise<Deal[]> {
       filterGroups: [{
         filters: [
           { propertyName: "pipeline", operator: "IN", values: SALES_PIPELINES },
-          { propertyName: "dealname", operator: "CONTAINS_TOKEN", value: "Bidmachine" },
+          { propertyName: "normalised_dau__us_dau__tier_1__065", operator: "HAS_PROPERTY" },
         ],
       }],
       properties: ["dealname", "createdate", "normalised_dau__us_dau__tier_1__065", "bm_dau_usa_publishers"],
@@ -123,9 +138,10 @@ async function fetchSalesBidmachineDeals(): Promise<Deal[]> {
 function aggregateBySource(
   deals: Deal[],
   dealContactMap: Map<string, string[]>,
-  contactSource: Map<string, string>
-): Record<string, { count: number; normDau: number }> {
-  const agg: Record<string, { count: number; normDau: number }> = {}
+  contactSource: Map<string, string>,
+  portalId = "0"
+): Record<string, { count: number; normDau: number; deals: DealInfo[] }> {
+  const agg: Record<string, { count: number; normDau: number; deals: DealInfo[] }> = {}
   for (const deal of deals) {
     const cids = dealContactMap.get(deal.id) ?? []
     const src = cids.length > 0 ? (contactSource.get(cids[0]) ?? "UNKNOWN") : "UNKNOWN"
@@ -134,31 +150,52 @@ function aggregateBySource(
       parseFloat(deal.properties.normalised_dau__us_dau__tier_1__065 ?? "0") ||
       parseFloat(deal.properties.bm_dau_usa_publishers ?? "0") ||
       0
-    if (!agg[src]) agg[src] = { count: 0, normDau: 0 }
+    if (!agg[src]) agg[src] = { count: 0, normDau: 0, deals: [] }
     agg[src].count++
     agg[src].normDau += dau
+    agg[src].deals.push({
+      id:      deal.id,
+      name:    deal.properties.dealname ?? deal.id,
+      normDau: Math.round(dau),
+      url:     `https://app.hubspot.com/contacts/${portalId}/deal/${deal.id}`,
+    })
   }
   return agg
 }
 
-type SourceRow = { source: string; count: number; pct: number; normDau: number; qoqPct: number | null }
+type SourceRow = {
+  source:  string
+  count:   number
+  pct:     number
+  normDau: number
+  qoqPct:  number | null
+  deals:   DealInfo[]
+}
 
 function buildRows(
   deals: Deal[],
   contactMap: Map<string, string[]>,
   contactSource: Map<string, string>,
-  prevAgg?: Record<string, { count: number; normDau: number }>
+  portalId: string,
+  prevAgg?: Record<string, { count: number; normDau: number; deals: DealInfo[] }>
 ): SourceRow[] {
-  const agg = aggregateBySource(deals, contactMap, contactSource)
+  const agg = aggregateBySource(deals, contactMap, contactSource, portalId)
   const total = deals.length || 1
   return Object.entries(agg)
-    .map(([key, { count, normDau }]) => {
+    .map(([key, { count, normDau, deals: dealList }]) => {
       const label = SOURCE_LABELS[key] ?? (key === "UNKNOWN" ? "Unknown" : key)
       const prevNormDau = prevAgg?.[key]?.normDau ?? 0
       const qoqPct = prevNormDau > 0
         ? Math.round(((normDau - prevNormDau) / prevNormDau) * 100)
         : null
-      return { source: label, count, pct: Math.round((count / total) * 100), normDau: Math.round(normDau), qoqPct }
+      return {
+        source:  label,
+        count,
+        pct:     Math.round((count / total) * 100),
+        normDau: Math.round(normDau),
+        qoqPct,
+        deals:   dealList.sort((a, b) => b.normDau - a.normDau),
+      }
     })
     .sort((a, b) => b.normDau - a.normDau)
 }
@@ -168,7 +205,7 @@ export async function GET() {
     const quarters = buildQuarters()
 
     // Fetch sign-up pipeline deals per quarter AND all "requests Bidmachine" sales deals in parallel
-    const [allQuarterDeals, salesDeals] = await Promise.all([
+    const [allQuarterDeals, salesDeals, portalId] = await Promise.all([
       Promise.all(
         quarters.map(({ start, end }) =>
           searchDeals(
@@ -177,11 +214,12 @@ export async function GET() {
               { propertyName: "createdate", operator: "GTE", value: start },
               { propertyName: "createdate", operator: "LT",  value: end },
             ],
-            ["normalised_dau__us_dau__tier_1__065"]
+            ["dealname", "normalised_dau__us_dau__tier_1__065"]
           )
         )
       ),
-      fetchSalesBidmachineDeals(),
+      fetchSalesTransferredDeals(),
+      getPortalId(),
     ])
 
     // Bucket sales deals by quarter using their createdate (same ranges as sign-up pipeline)
@@ -210,7 +248,7 @@ export async function GET() {
 
     // Per-quarter raw aggregations for QoQ reference
     const perQuarterAgg = mergedByQuarter.map((deals, i) =>
-      aggregateBySource(deals, allContactMaps[i], contactSource)
+      aggregateBySource(deals, allContactMaps[i], contactSource, portalId)
     )
 
     const result: Record<string, SourceRow[]> = {}
@@ -219,10 +257,11 @@ export async function GET() {
         mergedByQuarter[i],
         allContactMaps[i],
         contactSource,
+        portalId,
         i > 0 ? perQuarterAgg[i - 1] : undefined
       )
     }
-    result.ytd = buildRows(ytdDeals, ytdContactMap, contactSource)
+    result.ytd = buildRows(ytdDeals, ytdContactMap, contactSource, portalId)
 
     return NextResponse.json(result)
   } catch (e) {
