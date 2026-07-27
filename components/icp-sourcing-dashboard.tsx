@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useRef } from "react"
 import type { ICPCandidate, ICPSourcingResponse, Vertical, EngagementTier, RecommendedAction, MMPDetected } from "@/lib/icp-sourcing"
 
 // ─── Design system (mirrors g2-dashboard.tsx) ─────────────────────────────────
@@ -307,6 +307,442 @@ function Spinner() {
   )
 }
 
+// ─── Domain Enrichment Tab ────────────────────────────────────────────────────
+
+type DashboardTab = Vertical | "domain-enrichment"
+
+type DERStatus = "idle" | "ready" | "running" | "done" | "error" | "cancelled"
+
+type DERRow = {
+  rowIndex: number
+  publisher: string
+  domain: string | null
+  domain2: string | null
+  confidence: "High" | "Ambiguous" | "No match"
+  candidates: string
+}
+
+type DERSummary = { high: number; ambiguous: number; noMatch: number }
+
+function ConfBadge({ value }: { value: DERRow["confidence"] }) {
+  const cfg: Record<DERRow["confidence"], { bg: string; color: string }> = {
+    "High":     { bg: C.greenDim, color: C.green },
+    "Ambiguous":{ bg: C.amberDim, color: C.amber },
+    "No match": { bg: "rgba(124,140,148,0.12)", color: C.slate },
+  }
+  const { bg, color } = cfg[value]
+  return (
+    <span style={{
+      padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600,
+      background: bg, color, whiteSpace: "nowrap",
+    }}>
+      {value}
+    </span>
+  )
+}
+
+function DomainEnrichmentTab() {
+  const [status, setStatus]               = useState<DERStatus>("idle")
+  const [file, setFile]                   = useState<File | null>(null)
+  const [csvHeaders, setCsvHeaders]       = useState<string[]>([])
+  const [originalRows, setOriginalRows]   = useState<Record<string, string>[]>([])
+  const [totalRows, setTotalRows]         = useState(0)
+  const [processedRows, setProcessedRows] = useState(0)
+  const [enrichedRows, setEnrichedRows]   = useState<DERRow[]>([])
+  const [summary, setSummary]             = useState<DERSummary | null>(null)
+  const [error, setError]                 = useState<string | null>(null)
+  const [isDragOver, setIsDragOver]       = useState(false)
+  const abortRef    = useRef<AbortController | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function parseClientCSV(text: string): { headers: string[]; rows: Record<string, string>[]; error?: string } {
+    const raw = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/^\uFEFF/, "")
+    const lines = raw.split("\n").filter((l) => l.trim() !== "")
+    if (lines.length < 2) return { headers: [], rows: [], error: "CSV has no data rows" }
+    function parseFields(line: string): string[] {
+      const fields: string[] = []
+      let i = 0
+      while (i <= line.length) {
+        if (i === line.length) { fields.push(""); break }
+        if (line[i] === '"') {
+          let val = ""; i++
+          while (i < line.length) {
+            if (line[i] === '"' && line[i + 1] === '"') { val += '"'; i += 2 }
+            else if (line[i] === '"') { i++; break }
+            else { val += line[i++] }
+          }
+          fields.push(val)
+          if (line[i] === ",") i++; else break
+        } else {
+          const end = line.indexOf(",", i)
+          if (end === -1) { fields.push(line.slice(i)); break }
+          fields.push(line.slice(i, end)); i = end + 1
+        }
+      }
+      return fields
+    }
+    const headers = parseFields(lines[0])
+    if (!headers.includes("Publisher")) {
+      return { headers, rows: [], error: 'CSV must have a "Publisher" column' }
+    }
+    const rows = lines.slice(1).map((line) => {
+      const vals = parseFields(line)
+      return Object.fromEntries(headers.map((h, idx) => [h, vals[idx] ?? ""]))
+    })
+    return { headers, rows }
+  }
+
+  function loadFile(f: File) {
+    if (!f.name.endsWith(".csv") && f.type !== "text/csv") {
+      setError("Please upload a .csv file"); return
+    }
+    f.text().then((text) => {
+      const { headers, rows, error: parseError } = parseClientCSV(text)
+      if (parseError) { setError(parseError); return }
+      setCsvHeaders(headers)
+      setOriginalRows(rows)
+      setTotalRows(rows.length)
+      setFile(f)
+      setStatus("ready")
+      setError(null)
+    })
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault(); setIsDragOver(false)
+    const f = e.dataTransfer.files[0]
+    if (f) loadFile(f)
+  }
+
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0]
+    if (f) loadFile(f)
+  }
+
+  async function handleStart() {
+    if (!file) return
+    const controller = new AbortController()
+    abortRef.current = controller
+    setStatus("running"); setProcessedRows(0); setEnrichedRows([]); setSummary(null); setError(null)
+    const formData = new FormData()
+    formData.append("csv", file)
+    try {
+      const res = await fetch("/api/domain-enrichment", {
+        method: "POST", body: formData, signal: controller.signal,
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        throw new Error(err.error ?? `HTTP ${res.status}`)
+      }
+      const reader = res.body!.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split("\n"); buffer = lines.pop() ?? ""
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const event = JSON.parse(line)
+            if (event.type === "start") {
+              setTotalRows(event.total)
+            } else if (event.type === "row") {
+              setProcessedRows((n) => n + 1)
+              setEnrichedRows((prev) => [...prev, {
+                rowIndex: event.rowIndex, publisher: event.publisher,
+                domain: event.domain, domain2: event.domain2 ?? null,
+                confidence: event.confidence, candidates: event.candidates ?? "",
+              }])
+            } else if (event.type === "done" || event.type === "cancelled") {
+              setSummary(event.summary)
+              setStatus(event.type === "done" ? "done" : "cancelled")
+            }
+          } catch { /* skip malformed line */ }
+        }
+      }
+    } catch (e) {
+      if ((e as Error).name === "AbortError") {
+        setStatus("cancelled")
+      } else {
+        setError(e instanceof Error ? e.message : String(e))
+        setStatus("error")
+      }
+    }
+  }
+
+  function handleCancel() { abortRef.current?.abort() }
+
+  function handleReset() {
+    setFile(null); setCsvHeaders([]); setOriginalRows([])
+    setTotalRows(0); setProcessedRows(0); setEnrichedRows([])
+    setSummary(null); setError(null); setStatus("idle")
+    if (fileInputRef.current) fileInputRef.current.value = ""
+  }
+
+  function handleExport() {
+    if (!csvHeaders.length || !enrichedRows.length) return
+    const extraCols = ["Domain", "Domain 2", "Match Confidence", "Candidate Matches"]
+    const outHeaders = [...csvHeaders.filter((h) => !extraCols.includes(h)), ...extraCols]
+    const enrichMap = new Map(enrichedRows.map((r) => [r.rowIndex, r]))
+    function escField(s: string): string {
+      if (!s) return ""
+      if (s.includes(",") || s.includes('"') || s.includes("\n")) return '"' + s.replace(/"/g, '""') + '"'
+      return s
+    }
+    const csvLines = [
+      outHeaders.map(escField).join(","),
+      ...originalRows.map((row, i) => {
+        const e = enrichMap.get(i)
+        const outRow = { ...row }
+        outRow["Domain"]            = e?.domain       ?? outRow["Domain"]  ?? ""
+        outRow["Domain 2"]          = e?.domain2      ?? ""
+        outRow["Match Confidence"]  = e?.confidence   ?? ""
+        outRow["Candidate Matches"] = e?.candidates   ?? ""
+        return outHeaders.map((h) => escField(outRow[h] ?? "")).join(",")
+      }),
+    ]
+    const blob = new Blob([csvLines.join("\n")], { type: "text/csv" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = (file?.name ?? "publishers").replace(/\.csv$/i, "_enriched.csv")
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const pct = totalRows > 0 ? Math.round((processedRows / totalRows) * 100) : 0
+
+  const TH: React.CSSProperties = {
+    textAlign: "left", padding: "6px 10px", color: C.muted, fontWeight: 600,
+    fontSize: "10px", letterSpacing: "0.08em", textTransform: "uppercase",
+    borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap",
+  }
+  const TD: React.CSSProperties = { padding: "8px 10px", verticalAlign: "middle" }
+
+  // ── idle ────────────────────────────────────────────────────────────────────
+  if (status === "idle") {
+    return (
+      <Panel>
+        <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, marginBottom: "6px" }}>
+          Domain Enrichment
+        </p>
+        <p style={{ fontSize: "12px", color: C.slate, marginBottom: "20px" }}>
+          Upload a publisher CSV to look up company domains via SensorTower.{" "}
+          Needs a <span style={{ color: C.sageLight, fontFamily: MONO }}>Publisher</span> column.
+        </p>
+        {error && (
+          <div style={{ marginBottom: "16px", padding: "10px 14px", background: C.redDim, border: `1px solid rgba(239,68,68,0.25)`, borderRadius: "8px", color: C.red, fontSize: "12px" }}>
+            {error}
+          </div>
+        )}
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={handleDrop}
+          style={{
+            border: `1.5px dashed ${isDragOver ? C.accent : C.border}`,
+            borderRadius: "12px", padding: "48px 24px", textAlign: "center",
+            cursor: "pointer", background: isDragOver ? C.accentDim : "transparent",
+            transition: "all 0.15s",
+          }}
+        >
+          <div style={{ fontSize: "28px", marginBottom: "12px", opacity: 0.45 }}>↑</div>
+          <p style={{ fontSize: "13px", color: C.sage, margin: 0 }}>
+            Drop a CSV file here, or <span style={{ color: C.accent }}>click to browse</span>
+          </p>
+          <p style={{ fontSize: "11px", color: C.muted, marginTop: "6px" }}>
+            Must include a <span style={{ fontFamily: MONO }}>Publisher</span> column
+          </p>
+        </div>
+        <input ref={fileInputRef} type="file" accept=".csv,text/csv" style={{ display: "none" }} onChange={handleFileInput} />
+      </Panel>
+    )
+  }
+
+  // ── ready ───────────────────────────────────────────────────────────────────
+  if (status === "ready") {
+    const estMins = Math.max(1, Math.round(totalRows * 4 * 0.25 / 60))
+    return (
+      <Panel>
+        <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, marginBottom: "16px" }}>
+          Domain Enrichment
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "14px 16px", borderRadius: "10px", background: C.cardAlt, border: `1px solid ${C.border}`, marginBottom: "16px" }}>
+          <span style={{ color: C.accent, fontSize: "18px", lineHeight: 1 }}>↑</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ fontSize: "13px", color: C.sageLight, margin: 0, fontWeight: 500 }}>{file?.name}</p>
+            <p style={{ fontSize: "11px", color: C.muted, margin: "3px 0 0" }}>
+              {totalRows.toLocaleString()} rows · {csvHeaders.length} columns · Publisher column ✓
+            </p>
+          </div>
+          <button onClick={handleReset} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: "12px", padding: "4px 8px" }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = C.red)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = C.muted)}>
+            Clear
+          </button>
+        </div>
+        <p style={{ fontSize: "11px", color: C.muted, marginBottom: "18px" }}>
+          Estimated ~{estMins} min · SensorTower rate-limited to ~4 calls/row
+        </p>
+        <button onClick={handleStart}
+          style={{ background: C.accentDim, border: `1px solid ${C.borderAccent}`, borderRadius: "8px", padding: "9px 22px", color: C.accent, fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+          Start Enrichment
+        </button>
+      </Panel>
+    )
+  }
+
+  // ── running ─────────────────────────────────────────────────────────────────
+  if (status === "running") {
+    const liveRows = enrichedRows.slice(-10)
+    const highCount = enrichedRows.filter((r) => r.confidence === "High").length
+    const ambigCount = enrichedRows.filter((r) => r.confidence === "Ambiguous").length
+    const noMatchCount = enrichedRows.filter((r) => r.confidence === "No match").length
+    return (
+      <Panel>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <Spinner />
+            <p style={{ fontSize: "13px", color: C.sageLight, margin: 0, fontWeight: 600 }}>
+              Row {processedRows.toLocaleString()} / {totalRows.toLocaleString()}
+            </p>
+            <span style={{ fontSize: "12px", color: C.muted, fontFamily: MONO }}>({pct}%)</span>
+          </div>
+          <button onClick={handleCancel}
+            style={{ background: C.redDim, border: `1px solid rgba(239,68,68,0.25)`, borderRadius: "6px", padding: "5px 14px", color: C.red, fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+            Cancel
+          </button>
+        </div>
+        <div style={{ height: "6px", background: C.border, borderRadius: "3px", marginBottom: "16px", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: C.accent, borderRadius: "3px", transition: "width 0.4s ease" }} />
+        </div>
+        <div style={{ display: "flex", gap: "24px", marginBottom: "20px" }}>
+          {([["High", highCount, C.green], ["Ambiguous", ambigCount, C.amber], ["No match", noMatchCount, C.slate]] as const).map(([label, count, color]) => (
+            <div key={label}>
+              <span style={{ fontSize: "11px", color: C.muted }}>{label} </span>
+              <span style={{ fontSize: "14px", fontWeight: 700, color, fontFamily: MONO }}>{count}</span>
+            </div>
+          ))}
+        </div>
+        {liveRows.length > 0 && (
+          <>
+            <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "8px" }}>
+              Live feed
+            </p>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                <thead>
+                  <tr>
+                    <th style={TH}>Publisher</th>
+                    <th style={TH}>Domain</th>
+                    <th style={TH}>Domain 2</th>
+                    <th style={{ ...TH, textAlign: "center" }}>Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {liveRows.map((r) => (
+                    <tr key={r.rowIndex} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ ...TD, color: C.sage, maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.publisher || "—"}</td>
+                      <td style={{ ...TD, fontFamily: MONO, fontSize: "11px", color: r.domain ? C.accent : C.muted }}>{r.domain ?? "—"}</td>
+                      <td style={{ ...TD, fontFamily: MONO, fontSize: "11px", color: r.domain2 ? C.accentBright : C.muted }}>{r.domain2 ?? "—"}</td>
+                      <td style={{ ...TD, textAlign: "center" }}><ConfBadge value={r.confidence} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Panel>
+    )
+  }
+
+  // ── done / cancelled ────────────────────────────────────────────────────────
+  if ((status === "done" || status === "cancelled") && summary) {
+    const total = enrichedRows.length
+    return (
+      <Panel>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "20px" }}>
+          <div>
+            <p style={{ fontSize: "15px", fontWeight: 700, color: C.sageLight, margin: 0 }}>
+              {status === "cancelled" ? "Enrichment cancelled" : "Enrichment complete"}
+            </p>
+            <p style={{ fontSize: "11px", color: C.muted, marginTop: "3px" }}>
+              {file?.name} · {total.toLocaleString()} rows processed
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+            <button onClick={handleReset}
+              style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: "8px", padding: "8px 16px", color: C.muted, fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+              New file
+            </button>
+            <button onClick={handleExport} disabled={enrichedRows.length === 0}
+              style={{ display: "flex", alignItems: "center", gap: "6px", background: C.accentDim, border: `1px solid ${C.borderAccent}`, borderRadius: "8px", padding: "8px 18px", color: C.accent, fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+              Export CSV ↓
+            </button>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "24px" }}>
+          {([
+            { label: "Total",     value: total,          color: C.sageLight, pct: null },
+            { label: "High",      value: summary.high,   color: C.green,     pct: total > 0 ? (summary.high / total * 100).toFixed(1) : "0" },
+            { label: "Ambiguous", value: summary.ambiguous, color: C.amber,  pct: total > 0 ? (summary.ambiguous / total * 100).toFixed(1) : "0" },
+            { label: "No match",  value: summary.noMatch, color: C.slate,    pct: total > 0 ? (summary.noMatch / total * 100).toFixed(1) : "0" },
+          ] as const).map(({ label, value, color, pct: p }) => (
+            <div key={label} style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: "10px", padding: "14px 16px" }}>
+              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, margin: "0 0 6px" }}>{label}</p>
+              <p style={{ fontSize: "20px", fontWeight: 700, color, margin: 0, fontFamily: MONO }}>{(value as number).toLocaleString()}</p>
+              {p && <p style={{ fontSize: "10px", color: C.muted, margin: "2px 0 0" }}>{p}%</p>}
+            </div>
+          ))}
+        </div>
+        <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "10px" }}>Results</p>
+        <div style={{ maxHeight: "480px", overflowY: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+            <thead style={{ position: "sticky", top: 0, background: C.card, zIndex: 1 }}>
+              <tr>
+                <th style={TH}>Publisher</th>
+                <th style={TH}>Domain</th>
+                <th style={TH}>Domain 2</th>
+                <th style={{ ...TH, textAlign: "center" }}>Confidence</th>
+                <th style={{ ...TH }}>Candidates / Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {enrichedRows.map((r, i) => (
+                <tr key={r.rowIndex} style={{ borderBottom: i < enrichedRows.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                  <td style={{ ...TD, color: C.sage, maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.publisher || "—"}</td>
+                  <td style={{ ...TD, fontFamily: MONO, fontSize: "11px", color: r.domain ? C.accent : C.muted }}>{r.domain ?? "—"}</td>
+                  <td style={{ ...TD, fontFamily: MONO, fontSize: "11px", color: r.domain2 ? C.accentBright : C.muted }}>{r.domain2 ?? "—"}</td>
+                  <td style={{ ...TD, textAlign: "center" }}><ConfBadge value={r.confidence} /></td>
+                  <td style={{ ...TD, color: C.muted, fontSize: "11px", maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={r.candidates}>{r.candidates || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    )
+  }
+
+  // ── error ───────────────────────────────────────────────────────────────────
+  return (
+    <Panel>
+      <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "18px 20px", background: C.redDim, border: `1px solid rgba(239,68,68,0.25)`, borderRadius: "10px", color: C.red, fontSize: "13px", marginBottom: "16px" }}>
+        <span style={{ fontSize: "16px", flexShrink: 0 }}>⚠</span>
+        {error ?? "An unknown error occurred."}
+      </div>
+      <button onClick={handleReset}
+        style={{ background: C.accentDim, border: `1px solid ${C.borderAccent}`, borderRadius: "8px", padding: "8px 18px", color: C.accent, fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
+        Start over
+      </button>
+    </Panel>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ICPSourcingDashboard() {
@@ -317,7 +753,7 @@ export function ICPSourcingDashboard() {
     "prediction-markets": { status: "idle", candidates: [], fetchedAt: null, error: null },
   })
 
-  const [activeTab, setActiveTab] = useState<Vertical>("iap-gaming")
+  const [activeTab, setActiveTab] = useState<DashboardTab>("iap-gaming")
 
   const isLoading = NON_CTV_VERTICALS.some((v) => results[v].status === "loading")
 
@@ -411,6 +847,9 @@ export function ICPSourcingDashboard() {
   // ── Tab content ────────────────────────────────────────────────────────────
 
   function TabContent() {
+    if (activeTab === "domain-enrichment") {
+      return <DomainEnrichmentTab />
+    }
     if (activeTab === "ctv") {
       return (
         <Panel>
@@ -578,6 +1017,27 @@ export function ICPSourcingDashboard() {
             </button>
           )
         })}
+        <button
+          onClick={() => setActiveTab("domain-enrichment")}
+          style={{
+            display:      "inline-flex",
+            alignItems:   "center",
+            padding:      "8px 14px",
+            fontSize:     "12px",
+            fontWeight:   600,
+            background:   "transparent",
+            border:       "none",
+            borderBottom: activeTab === "domain-enrichment" ? `2px solid ${C.accent}` : "2px solid transparent",
+            cursor:       "pointer",
+            color:        activeTab === "domain-enrichment" ? C.accent : C.muted,
+            marginBottom: "-1px",
+            borderRadius: "0",
+            whiteSpace:   "nowrap",
+            transition:   "color 0.15s",
+          }}
+        >
+          Domain Enrichment
+        </button>
       </div>
 
       {/* ── Tab content ──────────────────────────────────────────────────────── */}

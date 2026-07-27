@@ -74,7 +74,8 @@ type AdMob2025Deal  = { id: string; name: string; normDau: number; signupDate: s
 type IronSourceDeal = { id: string; name: string; normDau: number; stage: string; stageId: string; createDate: string; url: string }
 type EmailSplitRow = { quarter: string; business: number; free: number; unknown: number }
 type EmailSplit    = EmailSplitRow[]
-type SourceRow  = { source: string; count: number; pct: number; normDau: number; qoqPct: number | null }
+type SourceDeal = { id: string; name: string; normDau: number; url: string }
+type SourceRow  = { source: string; count: number; pct: number; normDau: number; qoqPct: number | null; deals: SourceDeal[] }
 type SourceData = Record<string, SourceRow[]>
 
 type WeeklyReportData = {
@@ -584,51 +585,126 @@ function ErrorBanner({ children }: { children: React.ReactNode }) {
   )
 }
 
+// ─── Source accordion row ──────────────────────────────────────────────────────
+const SOURCE_COLORS = [C.accent, C.blue, C.amber, C.purple, C.red, C.muted]
+
+function SourceGroup({ row, color, showQoQ }: { row: SourceRow; color: string; showQoQ: boolean }) {
+  const [open, setOpen] = useState(false)
+  const qoqPositive = row.qoqPct !== null && row.qoqPct >= 0
+  return (
+    <div style={{
+      border:       `1px solid ${open ? color + "40" : C.border}`,
+      borderRadius: "10px",
+      overflow:     "hidden",
+      transition:   "border-color 0.2s",
+    }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width:       "100%",
+          display:     "flex",
+          alignItems:  "center",
+          gap:         "10px",
+          padding:     "9px 12px",
+          background:  open ? `${color}0d` : "transparent",
+          border:      "none",
+          cursor:      "pointer",
+          textAlign:   "left",
+          transition:  "background 0.2s",
+        }}
+      >
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: color, flexShrink: 0 }} />
+        <span style={{ flex: 1, fontSize: "12.5px", fontWeight: 600, color: C.sage }}>{row.source}</span>
+
+        {/* DAU */}
+        <span style={{ fontFamily: MONO, fontSize: "12px", fontWeight: 600, color: row.normDau > 0 ? color : C.muted, minWidth: 52, textAlign: "right" }}>
+          {row.normDau > 0 ? fmtNum(row.normDau) : "—"}
+        </span>
+
+        {/* QoQ chip */}
+        {showQoQ && (
+          row.qoqPct !== null ? (
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: 2,
+              background: qoqPositive ? C.accentDim : C.redDim,
+              color:      qoqPositive ? C.accent : C.red,
+              padding: "1px 6px", borderRadius: "999px", fontSize: "10px", fontWeight: 600,
+              minWidth: 56, justifyContent: "center", flexShrink: 0,
+            }}>
+              {qoqPositive ? "▲" : "▼"} {Math.abs(row.qoqPct)}%
+            </span>
+          ) : <span style={{ minWidth: 56, flexShrink: 0 }} />
+        )}
+
+        {/* Deal count */}
+        <span style={{ fontSize: "11px", color: C.muted, minWidth: 44, textAlign: "right", flexShrink: 0 }}>
+          {row.count} deal{row.count !== 1 ? "s" : ""}
+        </span>
+
+        {/* Chevron */}
+        <span style={{ fontSize: "10px", color: C.muted, transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s", lineHeight: 1 }}>▾</span>
+      </button>
+
+      {/* Progress bar */}
+      <div style={{ height: 3, background: C.border, margin: "0 12px" }}>
+        <div style={{ height: "100%", borderRadius: 2, background: color, width: `${row.pct}%`, opacity: 0.6 }} />
+      </div>
+
+      {/* Deal rows */}
+      {open && (
+        <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 3 }}>
+          {row.deals.map((deal, i) => (
+            <div
+              key={deal.id}
+              style={{
+                display:      "flex",
+                alignItems:   "center",
+                gap:          "10px",
+                padding:      "7px 12px 7px 29px",
+                borderBottom: i < row.deals.length - 1 ? `1px solid ${C.border}` : "none",
+              }}
+            >
+              <span style={{ flex: 1, fontSize: "12px", color: C.sage, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {deal.name}
+              </span>
+              <span style={{ fontFamily: MONO, fontSize: "11px", color: deal.normDau > 0 ? C.slate : C.muted, minWidth: 48, textAlign: "right", flexShrink: 0 }}>
+                {deal.normDau > 0 ? fmtDau(deal.normDau) : "—"}
+              </span>
+              <a
+                href={deal.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: "22px", height: "22px", borderRadius: "6px",
+                  background: C.accentGlow, border: `1px solid ${C.border}`,
+                  color: C.muted, fontSize: "10px", textDecoration: "none", flexShrink: 0,
+                  transition: "background 0.15s, color 0.15s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = C.accentDim; e.currentTarget.style.color = C.accent }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = C.accentGlow; e.currentTarget.style.color = C.muted }}
+                title="Open in HubSpot"
+              >
+                ↗
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Source table ─────────────────────────────────────────────────────────────
 function SourceTable({ rows, error, showQoQ }: { rows: SourceRow[] | null; error: boolean; showQoQ: boolean }) {
-  const BAR_COLORS = [C.accent, C.blue, C.amber, C.purple, C.red, C.muted]
   if (error) return <DataError label="contact sources" />
   if (rows === null) return <LoadingSkeleton h={180} />
   if (rows.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: "24px 0", textAlign: "center" }}>No data</p>
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
-        <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>Source</span>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 48, textAlign: "right" }}>Norm DAU</span>
-          {showQoQ && <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 36, textAlign: "right" }}>QoQ</span>}
-          <span style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", minWidth: 44, textAlign: "right" }}>Deals</span>
-        </div>
-      </div>
-      {rows.map((row, i) => {
-        const color = BAR_COLORS[i % BAR_COLORS.length]
-        const qoqPositive = row.qoqPct !== null && row.qoqPct >= 0
-        return (
-          <div key={row.source}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-              <span style={{ fontSize: 11, color: C.sage }}>{row.source}</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                <span style={{ fontSize: 11, color: C.sageLight, fontFamily: MONO, fontWeight: 600, minWidth: 48, textAlign: "right" }}>
-                  {fmtNum(row.normDau ?? 0)}
-                </span>
-                {showQoQ && (
-                  <span style={{ fontSize: 10, fontFamily: MONO, fontWeight: 500, minWidth: 36, textAlign: "right",
-                    color: row.qoqPct === null ? C.muted : qoqPositive ? C.accent : C.red,
-                  }}>
-                    {row.qoqPct === null ? "—" : `${qoqPositive ? "+" : ""}${row.qoqPct}%`}
-                  </span>
-                )}
-                <span style={{ fontSize: 10, color: C.muted, fontFamily: MONO, minWidth: 44, textAlign: "right" }}>
-                  {row.count}
-                </span>
-              </div>
-            </div>
-            <div style={{ height: 4, borderRadius: 2, background: C.border }}>
-              <div style={{ height: "100%", borderRadius: 2, background: color, width: `${row.pct}%`, transition: "width 0.4s ease" }} />
-            </div>
-          </div>
-        )
-      })}
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {rows.map((row, i) => (
+        <SourceGroup key={row.source} row={row} color={SOURCE_COLORS[i % SOURCE_COLORS.length]} showQoQ={showQoQ} />
+      ))}
     </div>
   )
 }
@@ -652,6 +728,9 @@ export function SelfServeDashboard() {
   const [ironSourceError, setIronSourceError] = useState(false)
   const [isYear,          setIsYear]          = useState<"All" | "YTD" | "2024" | "2025" | "2026">("All")
   const [isQuarter,       setIsQuarter]       = useState<"All" | "Q1" | "Q2" | "Q3" | "Q4">("All")
+  const [admobYear,       setAdmobYear]       = useState<string>("All")
+  const [admobQuarter,    setAdmobQuarter]    = useState<"All" | "Q1" | "Q2" | "Q3" | "Q4">("All")
+  const [admobDau,        setAdmobDau]        = useState<"All" | "under" | "over">("All")
 
   const filteredIronSource = useMemo(() => {
     if (!ironSource) return null
@@ -682,6 +761,51 @@ export function SelfServeDashboard() {
 
     return ironSource.filter((d) => d.createDate >= start && d.createDate <= end)
   }, [ironSource, isYear, isQuarter])
+
+  const admobYears = useMemo(() => {
+    if (!admob2025) return []
+    const years = Array.from(new Set(
+      admob2025.map((d) => d.signupDate?.slice(0, 4)).filter(Boolean)
+    )).sort()
+    return ["All", "YTD", ...years]
+  }, [admob2025])
+
+  const filteredAdmob2025 = useMemo(() => {
+    if (!admob2025) return null
+
+    const applyDau = (arr: typeof admob2025) => {
+      if (admobDau === "under") return arr.filter((d) => d.normDau <= 100_000)
+      if (admobDau === "over")  return arr.filter((d) => d.normDau > 100_000)
+      return arr
+    }
+
+    if (admobYear === "All") return applyDau(admob2025)
+
+    const TODAY = new Date().toISOString().slice(0, 10)
+    const QUARTER_RANGES: Record<string, [string, string]> = {
+      Q1: ["-01-01", "-04-01"],
+      Q2: ["-04-01", "-07-01"],
+      Q3: ["-07-01", "-10-01"],
+      Q4: ["-10-01", "-12-31T99"],
+    }
+
+    let start: string
+    let end: string
+
+    if (admobYear === "YTD") {
+      start = new Date().getUTCFullYear() + "-01-01"
+      end   = TODAY
+    } else if (admobQuarter !== "All") {
+      const [qs, qe] = QUARTER_RANGES[admobQuarter]
+      start = admobYear + qs
+      end   = admobYear + qe
+    } else {
+      start = admobYear + "-01-01"
+      end   = admobYear + "-12-31T99"
+    }
+
+    return applyDau(admob2025.filter((d) => d.signupDate >= start && d.signupDate <= end))
+  }, [admob2025, admobYear, admobQuarter, admobDau])
 
   const [emailSplit,     setEmailSplit]     = useState<EmailSplit | null>(null)
   const [emailSplitError,setEmailSplitError]= useState(false)
@@ -1452,25 +1576,71 @@ export function SelfServeDashboard() {
           </Panel>
         </div>
 
-        {/* ── Row 6: AdMob / GAM — 2025 Cohort ────────────────────────────── */}
+        {/* ── Row 6: AdMob / GAM — All Deals ──────────────────────────────── */}
         <Panel style={{ overflowY: "auto", maxHeight: "400px" }}>
-          <SectionLabel>AdMob / GAM — 2025 Signups (current stage)</SectionLabel>
+          {/* Header + filters */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+            <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.13em", textTransform: "uppercase", color: C.muted, margin: 0 }}>
+              AdMob / GAM — Pipeline Deals
+            </p>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {/* Year filter */}
+              <div style={{ display: "flex", gap: "3px" }}>
+                {admobYears.map((y) => (
+                  <button key={y} onClick={() => { setAdmobYear(y); setAdmobQuarter("All") }} style={{
+                    padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, cursor: "pointer",
+                    border:     `1px solid ${admobYear === y ? C.purple : C.border}`,
+                    background: admobYear === y ? `${C.purple}22` : "transparent",
+                    color:      admobYear === y ? C.purple : C.muted,
+                    letterSpacing: "0.02em",
+                  }}>{y}</button>
+                ))}
+              </div>
+              {/* Quarter filter — hidden for YTD/All, shown for specific years */}
+              {admobYear !== "YTD" && admobYear !== "All" && (
+                <div style={{ display: "flex", gap: "3px" }}>
+                  {(["All", "Q1", "Q2", "Q3", "Q4"] as const).map((q) => (
+                    <button key={q} onClick={() => setAdmobQuarter(q)} style={{
+                      padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, cursor: "pointer",
+                      border:     `1px solid ${admobQuarter === q ? C.accent : C.border}`,
+                      background: admobQuarter === q ? C.accentDim : "transparent",
+                      color:      admobQuarter === q ? C.accent : C.muted,
+                      letterSpacing: "0.02em",
+                    }}>{q}</button>
+                  ))}
+                </div>
+              )}
+              {/* DAU filter */}
+              <div style={{ display: "flex", gap: "3px" }}>
+                {([["All", "All"], ["under", "≤100k DAU"], ["over", ">100k DAU"]] as const).map(([val, label]) => (
+                  <button key={val} onClick={() => setAdmobDau(val)} style={{
+                    padding: "2px 8px", borderRadius: "999px", fontSize: "10px", fontWeight: 600, cursor: "pointer",
+                    border:     `1px solid ${admobDau === val ? C.blue : C.border}`,
+                    background: admobDau === val ? C.blueDim : "transparent",
+                    color:      admobDau === val ? C.blue : C.muted,
+                    letterSpacing: "0.02em",
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {admob2025Error ? (
-            <DataError label="AdMob 2025 data" />
-          ) : !admob2025 ? (
+            <DataError label="AdMob / GAM data" />
+          ) : !filteredAdmob2025 ? (
             <LoadingSkeleton h={200} />
-          ) : admob2025.length === 0 ? (
+          ) : filteredAdmob2025.length === 0 ? (
             <p style={{ fontSize: 12, color: C.muted, padding: "24px 0", textAlign: "center" }}>No deals found</p>
           ) : (
             <>
               {/* Summary */}
               <div style={{ display: "flex", gap: "16px", marginBottom: "12px" }}>
                 <span style={{ fontSize: "11px", color: C.muted }}>
-                  <span style={{ fontFamily: MONO, fontWeight: 600, color: C.sageLight }}>{admob2025.length}</span> deals
+                  <span style={{ fontFamily: MONO, fontWeight: 600, color: C.sageLight }}>{filteredAdmob2025.length}</span> deals
                 </span>
                 <span style={{ fontSize: "11px", color: C.muted }}>
                   <span style={{ fontFamily: MONO, fontWeight: 600, color: C.purple }}>
-                    {fmtDau(admob2025.reduce((s, d) => s + d.normDau, 0))}
+                    {fmtDau(filteredAdmob2025.reduce((s, d) => s + d.normDau, 0))}
                   </span> total Norm DAU
                 </span>
               </div>
@@ -1481,7 +1651,7 @@ export function SelfServeDashboard() {
                 ))}
               </div>
               {/* Rows */}
-              {admob2025.map((deal, i) => (
+              {filteredAdmob2025.map((deal, i) => (
                 <div
                   key={deal.id}
                   style={{
@@ -1490,7 +1660,7 @@ export function SelfServeDashboard() {
                     gap:             "8px",
                     alignItems:      "center",
                     padding:         "6px 8px",
-                    borderBottom:    i < admob2025.length - 1 ? `1px solid ${C.border}` : "none",
+                    borderBottom:    i < filteredAdmob2025.length - 1 ? `1px solid ${C.border}` : "none",
                     background:      i % 2 === 0 ? "transparent" : C.cardAlt,
                     borderRadius:    "4px",
                   }}

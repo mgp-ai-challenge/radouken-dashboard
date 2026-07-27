@@ -19,13 +19,11 @@ async function getPortalId(): Promise<string> {
 export async function GET() {
   try {
     const [deals, portalId] = await Promise.all([
-      // Deals that registered (entered New Registration) in 2025 and are currently in AdMob/GAM
+      // All deals currently in AdMob/GAM stage
       searchDeals(
         [
-          { propertyName: "pipeline",                                  operator: "EQ",  value: PIPELINE },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,       operator: "GTE", value: "2025-01-01" },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,       operator: "LT",  value: "2026-01-01" },
-          { propertyName: "dealstage",                                 operator: "EQ",  value: ADMOB_GAM_STAGE },
+          { propertyName: "pipeline",  operator: "EQ", value: PIPELINE },
+          { propertyName: "dealstage", operator: "EQ", value: ADMOB_GAM_STAGE },
         ],
         ["dealname", "normalised_dau__us_dau__tier_1__065", `hs_v2_date_entered_${NEW_REG_STAGE}`]
       ),
