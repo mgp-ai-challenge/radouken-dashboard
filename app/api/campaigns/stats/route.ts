@@ -14,8 +14,8 @@ export async function GET() {
 
     // Match each target by substring — prefer non-archived when multiple match
     const discovered = TARGET_CAMPAIGNS.map((target) => {
-      const matches = allCampaigns.filter((c) => c.name.includes(target.match))
-      const found = matches.find((c) => !(c as Record<string, unknown>).archived) ?? matches[0]
+      const matches = allCampaigns.filter((c) => c.name.includes(target.match) && !c.archived)
+      const found = matches[0]
       return {
         key:   target.key,
         id:    found?._id ?? null,

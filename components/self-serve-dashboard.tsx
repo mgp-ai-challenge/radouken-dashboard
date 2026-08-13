@@ -715,7 +715,7 @@ export function SelfServeDashboard() {
   const [kpisError,      setKpisError]      = useState(false)
   const [stages,         setStages]         = useState<StageRow[] | null>(null)
   const [stagesError,    setStagesError]    = useState(false)
-  const [stageQuarter,   setStageQuarter]   = useState<"Q1" | "Q2" | "Q3">("Q2")
+  const [stageQuarter,   setStageQuarter]   = useState<"Q1" | "Q2" | "Q3">("Q3")
   const [weekly,         setWeekly]         = useState<WeekRow[] | null>(null)
   const [weeklyError,    setWeeklyError]    = useState(false)
   const [monthly,        setMonthly]        = useState<MonthRow[] | null>(null)

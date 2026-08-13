@@ -4,9 +4,6 @@ import { searchDeals, HSDeal } from "@/lib/hubspot-deals"
 const PIPELINE = "52357803"
 const HS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN!
 
-// Stage that HubSpot's "Date entered New Registration = Q1" filter is applied to
-const NEW_REG_STAGE = "107224653"
-
 const STAGE_MAP: Record<string, string> = {
   "107224653":  "New Registration",
   "107224654":  "Under Review",
@@ -74,30 +71,30 @@ function groupByStage(deals: HSDeal[], portalId: string) {
 export async function GET() {
   try {
     const [q2Deals, q1Deals, q3Deals, portalId] = await Promise.all([
-      // Q2: deals that entered New Registration in Q2
+      // Q2: deals created in Q2
       searchDeals(
         [
-          { propertyName: "pipeline",                             operator: "EQ",  value: PIPELINE },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "GTE", value: Q2_START },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "LT",  value: Q3_START },
+          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+          { propertyName: "createdate", operator: "GTE", value: Q2_START },
+          { propertyName: "createdate", operator: "LT",  value: Q3_START },
         ],
         DEAL_PROPS
       ),
-      // Q1: deals that entered New Registration in Q1
+      // Q1: deals created in Q1
       searchDeals(
         [
-          { propertyName: "pipeline",                             operator: "EQ",  value: PIPELINE },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "GTE", value: Q1_START },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "LT",  value: Q1_END },
+          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+          { propertyName: "createdate", operator: "GTE", value: Q1_START },
+          { propertyName: "createdate", operator: "LT",  value: Q1_END },
         ],
         DEAL_PROPS
       ),
-      // Q3: deals that entered New Registration in Q3
+      // Q3: deals created in Q3
       searchDeals(
         [
-          { propertyName: "pipeline",                             operator: "EQ",  value: PIPELINE },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "GTE", value: Q3_START },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`, operator: "LT",  value: Q3_END },
+          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+          { propertyName: "createdate", operator: "GTE", value: Q3_START },
+          { propertyName: "createdate", operator: "LT",  value: Q3_END },
         ],
         DEAL_PROPS
       ),

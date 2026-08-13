@@ -102,20 +102,17 @@ export async function GET() {
     const thisMondayStr = thisMonday.toISOString().split("T")[0]
     const lastMondayStr = lastMonday.toISOString().split("T")[0]
 
-    const NEW_REG_STAGE = "107224653"
-
-    // Current quarter: deals that entered New Registration this quarter and are now Approved or Live
-    // Uses hs_v2_date_entered on New Registration — matches the pipeline stage breakdown tab logic
+    // Current quarter: deals created this quarter that are now Approved or Live
     const [qtdDeals, curAll, prevDeals, prevAll] = await Promise.all([
       searchDeals(
         [
-          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
-          { propertyName: "dealstage",                               operator: "IN",  values: ACTIVE_STAGES },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: curStart },
+          { propertyName: "pipeline",   operator: "EQ", value: PIPELINE },
+          { propertyName: "dealstage",  operator: "IN", values: ACTIVE_STAGES },
+          { propertyName: "createdate", operator: "GTE", value: curStart },
         ],
         ["normalised_dau__us_dau__tier_1__065", "hs_v2_date_entered_107224655"]
       ),
-      // Form fills = deals created this quarter (createdate), not stage entry date
+      // Form fills = all deals created this quarter
       searchDeals(
         [
           { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
@@ -126,14 +123,14 @@ export async function GET() {
       // Previous quarter: same logic
       searchDeals(
         [
-          { propertyName: "pipeline",                                operator: "EQ",  value: PIPELINE },
-          { propertyName: "dealstage",                               operator: "IN",  values: ACTIVE_STAGES },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "GTE", value: prevStart },
-          { propertyName: `hs_v2_date_entered_${NEW_REG_STAGE}`,    operator: "LT",  value: prevEnd },
+          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+          { propertyName: "dealstage",  operator: "IN",  values: ACTIVE_STAGES },
+          { propertyName: "createdate", operator: "GTE", value: prevStart },
+          { propertyName: "createdate", operator: "LT",  value: prevEnd },
         ],
         ["normalised_dau__us_dau__tier_1__065"]
       ),
-      // Previous quarter form fills by createdate
+      // Previous quarter form fills
       searchDeals(
         [
           { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },

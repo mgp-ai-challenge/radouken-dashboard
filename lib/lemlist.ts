@@ -3,9 +3,9 @@
 const LL_BASE = "https://api.lemlist.com/api"
 
 export const TARGET_CAMPAIGNS = [
-  { key: "nc"      as const, match: "Q2 Non Customers", label: "Tricky — Non-Customers", color: "#378ADD" },
-  { key: "cu"      as const, match: "Q2 Customers",     label: "Tricky — Customers",     color: "#534AB7" },
-  { key: "inbound" as const, match: "Inbound",          label: "Inbound SDK",            color: "#1D9E75" },
+  { key: "nc"      as const, match: "Non Customers IAP",   label: "UA Q3 — Non Customers IAP",   color: "#378ADD" },
+  { key: "cu"      as const, match: "Web/Brand Secondary", label: "UA Q3 — Web/Brand Secondary", color: "#534AB7" },
+  { key: "inbound" as const, match: "Inbound",             label: "Inbound SDK",                 color: "#1D9E75" },
 ]
 
 export type CampaignKey = "nc" | "cu" | "inbound"
@@ -65,9 +65,9 @@ async function llFetch(path: string, attempt = 0): Promise<unknown> {
   return res.json()
 }
 
-export async function fetchAllCampaigns(): Promise<Array<{ _id: string; name: string }>> {
+export async function fetchAllCampaigns(): Promise<Array<{ _id: string; name: string; archived?: boolean }>> {
   const data = await llFetch("/campaigns")
-  return (data as Array<{ _id: string; name: string }>) ?? []
+  return (data as Array<{ _id: string; name: string; archived?: boolean }>) ?? []
 }
 
 function parseStats(data: Record<string, unknown>): CampaignStats {
