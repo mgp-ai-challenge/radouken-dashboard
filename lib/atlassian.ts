@@ -1,7 +1,5 @@
 // lib/atlassian.ts
 
-const ACCT = process.env.ATLASSIAN_ACCOUNT_ID ?? ""
-
 const URGENT_CONFLUENCE_SPACE = "MGP"
 
 function authHeader(email: string, token: string) {
@@ -17,7 +15,7 @@ async function atlassianFetch(path: string): Promise<unknown> {
       Authorization: authHeader(email, token),
       Accept: "application/json",
     },
-    next: { revalidate: 120 }, // 2-minute cache
+    cache: "no-store",
   })
   if (!res.ok) throw new Error(`Atlassian API error ${res.status}: ${path}`)
   return res.json()
@@ -87,8 +85,9 @@ function normaliseStatus(raw: string): JiraStatus {
 // ─── Confluence ───────────────────────────────────────────────────────────────
 
 export async function fetchMyConfluenceComments(): Promise<ConfluenceComment[]> {
+  const acct = process.env.ATLASSIAN_ACCOUNT_ID ?? ""
   const cql = encodeURIComponent(
-    `type = comment AND mention = "${ACCT}" ORDER BY created DESC`
+    `type = comment AND mention = "${acct}" ORDER BY created DESC`
   )
   const data = await atlassianFetch(
     `/wiki/rest/api/search?cql=${cql}&limit=20&expand=content.space,content.history`
@@ -112,8 +111,9 @@ export async function fetchMyConfluenceComments(): Promise<ConfluenceComment[]> 
 }
 
 export async function fetchMyConfluencePages(): Promise<ConfluencePage[]> {
+  const acct = process.env.ATLASSIAN_ACCOUNT_ID ?? ""
   const cql = encodeURIComponent(
-    `type = page AND mention = "${ACCT}" ORDER BY lastmodified DESC`
+    `type = page AND mention = "${acct}" ORDER BY lastmodified DESC`
   )
   const data = await atlassianFetch(
     `/wiki/rest/api/search?cql=${cql}&limit=10&expand=space`

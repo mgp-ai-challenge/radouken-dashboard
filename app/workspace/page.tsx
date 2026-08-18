@@ -227,8 +227,8 @@ export default function ProjectWorkspacePage() {
           <p className="text-[10px] font-bold tracking-widest text-red-500 uppercase">
             Action Needed · {urgentComments.length}
           </p>
-          <div className="flex gap-3">
-            {urgentComments.map((c) => <ActionCard key={c.id} comment={c} />)}
+          <div className="flex gap-3 overflow-x-auto">
+            {urgentComments.slice(0, 3).map((c) => <ActionCard key={c.id} comment={c} />)}
           </div>
         </div>
       )}
