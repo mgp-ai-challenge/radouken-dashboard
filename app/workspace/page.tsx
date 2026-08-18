@@ -22,12 +22,13 @@ type JiraFilter = "active" | "todo" | "done"
 
 const JIRA_BASE = "https://appodeal.atlassian.net/browse"
 
-function statusStyle(status: JiraStatus) {
+function statusStyle(status: JiraStatus): string {
   switch (status) {
     case "In Progress": return "bg-blue-500/10 text-blue-500 border-blue-500/20"
     case "To Do":
     case "Open":        return "bg-amber-500/10 text-amber-500 border-amber-500/20"
     case "Done":        return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+    default:            return ""
   }
 }
 
@@ -258,7 +259,14 @@ export default function ProjectWorkspacePage() {
             </div>
 
             {filteredTasks.length === 0 ? (
-              <div className="py-10 text-center text-sm text-muted-foreground">No tasks in this filter</div>
+              <div className="py-10 text-center space-y-1">
+                <p className="text-sm text-muted-foreground">No tasks in this filter</p>
+                {jiraFilter === "active" && taskCounts.todo > 0 && (
+                  <p className="text-xs text-muted-foreground/60">
+                    {taskCounts.todo} task{taskCounts.todo !== 1 ? "s" : ""} in To Do
+                  </p>
+                )}
+              </div>
             ) : (
               filteredTasks.map((t) => <JiraRow key={t.key} task={t} />)
             )}
@@ -279,19 +287,23 @@ export default function ProjectWorkspacePage() {
       {!loading && (data?.pages.length || otherComments.length) ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold">Pages Mentioning You</h2>
-            <div className="border border-border rounded-lg overflow-hidden">
-              {(data?.pages ?? []).map((p) => <PageRow key={p.id} page={p} />)}
+          {(data?.pages ?? []).length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold">Pages Mentioning You</h2>
+              <div className="border border-border rounded-lg overflow-hidden">
+                {(data?.pages ?? []).map((p) => <PageRow key={p.id} page={p} />)}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold">Other Comments</h2>
-            <div className="border border-border rounded-lg overflow-hidden">
-              {otherComments.map((c) => <CommentRow key={c.id} comment={c} />)}
+          {otherComments.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold">Other Comments</h2>
+              <div className="border border-border rounded-lg overflow-hidden">
+                {otherComments.map((c) => <CommentRow key={c.id} comment={c} />)}
+              </div>
             </div>
-          </div>
+          )}
 
         </div>
       ) : null}
