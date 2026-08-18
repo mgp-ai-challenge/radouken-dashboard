@@ -31,7 +31,7 @@ export async function GET() {
 
     return NextResponse.json(
       { tasks, comments, pages, fetchedAt: new Date().toISOString() },
-      { headers: { "Cache-Control": "public, max-age=120, stale-while-revalidate=60" } }
+      { headers: { "Cache-Control": "private, max-age=120, stale-while-revalidate=60" } }
     )
   } catch (err) {
     console.error("[workspace]", err)
