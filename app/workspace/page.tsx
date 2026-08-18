@@ -1,149 +1,47 @@
+// app/workspace/page.tsx
 "use client"
 
-import { useState } from "react"
-import { ExternalLink, Plus, CheckCircle2, Clock, Circle, MessageSquare, FileText } from "lucide-react"
+import { useEffect, useState, useCallback } from "react"
+import { ExternalLink, Plus, RefreshCw, AlertTriangle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import type { JiraTask, ConfluenceComment, ConfluencePage, JiraStatus } from "@/lib/atlassian"
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface WorkspaceData {
+  tasks: JiraTask[]
+  comments: ConfluenceComment[]
+  pages: ConfluencePage[]
+  fetchedAt: string
+}
+
+type JiraFilter = "active" | "todo" | "done"
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const JIRA_BASE = "https://appodeal.atlassian.net/browse"
 
-type JiraStatus = "In Progress" | "To Do" | "Open" | "Done"
-
-interface JiraTask {
-  key: string
-  summary: string
-  status: JiraStatus
-  type: "Task" | "Sub-task"
-  updated: string
-}
-
-const JIRA_TASKS: JiraTask[] = [
-  { key: "GT-25", summary: "Flyers and Tabletents for the Whitepaper - State of Brand Demand", status: "In Progress", type: "Sub-task", updated: "Aug 12" },
-  { key: "GT-10", summary: "Digital Account Completion",                                        status: "In Progress", type: "Sub-task", updated: "Jul 23" },
-  { key: "GT-2",  summary: "Publisher Sign up page optimisation",                               status: "In Progress", type: "Task",     updated: "Jul 23" },
-  { key: "GT-4",  summary: "Review & change the copy of the form",                              status: "In Progress", type: "Sub-task", updated: "Jul 23" },
-  { key: "GT-1",  summary: "Budget Spent TD",                                                   status: "In Progress", type: "Task",     updated: "Jul 23" },
-  { key: "GT-9",  summary: "DMEXCO 2026",                                                       status: "In Progress", type: "Task",     updated: "Jun 29" },
-  { key: "GT-23", summary: "Q3 Inbound Campaign",                                               status: "To Do",       type: "Sub-task", updated: "Jul 23" },
-  { key: "GT-22", summary: "Outbounding Campaigns",                                             status: "Open",        type: "Task",     updated: "Jul 23" },
-  { key: "GT-20", summary: "Data Cleanup",                                                      status: "Open",        type: "Task",     updated: "Jul 23" },
-  { key: "GT-21", summary: "Review Max numbers in Pivot vs Reality",                            status: "To Do",       type: "Sub-task", updated: "Jul 23" },
-  { key: "GT-19", summary: "After sync and review / Paul - Ryan - Radu",                        status: "To Do",       type: "Sub-task", updated: "Jul 23" },
-  { key: "GT-17", summary: "Checking for Opportunities on both Hotel Lobby and Booth (Prices)", status: "Done",        type: "Sub-task", updated: "Aug 12" },
-  { key: "GT-12", summary: "Booth Setup",                                                       status: "Done",        type: "Sub-task", updated: "Aug 12" },
-  { key: "GT-5",  summary: "SelfServe Processes",                                               status: "Done",        type: "Task",     updated: "Aug 12" },
-  { key: "GT-18", summary: "Confirm with Ilyia if there is any other spend on Appodeal",        status: "Done",        type: "Sub-task", updated: "Aug 12" },
-  { key: "GT-14", summary: "New Pub sign - Needs for Demand team",                              status: "Done",        type: "Task",     updated: "Jul 3"  },
-  { key: "GT-16", summary: "Weather Channel - Media kit",                                       status: "Done",        type: "Sub-task", updated: "Jul 3"  },
-  { key: "GT-15", summary: "Discuss with Paul",                                                 status: "Done",        type: "Sub-task", updated: "Jul 3"  },
-  { key: "GT-11", summary: "Tickets Assigned",                                                  status: "Done",        type: "Sub-task", updated: "Jul 3"  },
-  { key: "GT-7",  summary: "Change comms for Google Admob",                                     status: "Done",        type: "Sub-task", updated: "Jul 3"  },
-  { key: "GT-8",  summary: "Automation for Auto deny low DAU admob deals",                      status: "Done",        type: "Sub-task", updated: "Jul 3"  },
-  { key: "GT-13", summary: "Create a Slack thread for Ironsource DAU data",                     status: "Done",        type: "Sub-task", updated: "Jul 3"  },
-  { key: "GT-6",  summary: "Add Email comms for Denied - Low Rating",                           status: "Done",        type: "Sub-task", updated: "Jun 30" },
-  { key: "GT-3",  summary: "Add G2 testimonials & Logo Reel on the landing page",               status: "Done",        type: "Sub-task", updated: "Jun 17" },
-]
-
-interface ConfluenceComment {
-  id: string
-  page: string
-  snippet: string
-  author: string
-  date: string
-  url: string
-  urgent: boolean
-}
-
-interface ConfluencePage {
-  id: string
-  title: string
-  space: string
-  date: string
-  url: string
-}
-
-const CONFLUENCE_COMMENTS: ConfluenceComment[] = [
-  {
-    id: "c1",
-    page: "Q3 content and comms plan",
-    snippet: "Mark wants us to get this promotion up and running sooner — let's discuss getting something together in the next couple of weeks and promoting it to drive meeting signups.",
-    author: "Ryan Barrett Christopher",
-    date: "Aug 4",
-    url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/6982926360/Q3+content+and+comms+plan?focusedCommentId=7106330758",
-    urgent: true,
-  },
-  {
-    id: "c2",
-    page: "Q3 content and comms plan",
-    snippet: "Speak to Radu about doing some sort of email promotion if we can (not required, but let's see if it makes sense).",
-    author: "Ryan Barrett Christopher",
-    date: "Aug 4",
-    url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/6982926360/Q3+content+and+comms+plan?focusedCommentId=7106494553",
-    urgent: true,
-  },
-  {
-    id: "c3",
-    page: "Marketing Team Homepage",
-    snippet: "If we have any existing spaces for this, please add them.",
-    author: "Ryan Barrett Christopher",
-    date: "Jul 29",
-    url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/7086866474/Marketing+Team+Homepage?focusedCommentId=7086243879",
-    urgent: false,
-  },
-  {
-    id: "c4",
-    page: "Marketing Team Homepage",
-    snippet: "Let's work together to define this.",
-    author: "Ryan Barrett Christopher",
-    date: "Jul 29",
-    url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/7086866474/Marketing+Team+Homepage?focusedCommentId=7086440481",
-    urgent: false,
-  },
-  {
-    id: "c5",
-    page: "BidMachine SDK — Internal Commercialisation Document",
-    snippet: "Can we connect on this?",
-    author: "Ryan Barrett Christopher",
-    date: "Jul 16",
-    url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/6853918753/BidMachine+SDK+Internal+Commercialisation+Document?focusedCommentId=7045546029",
-    urgent: false,
-  },
-  {
-    id: "c6",
-    page: "BM SDK pipeline for Q3",
-    snippet: "FYI",
-    author: "Ian Rooney",
-    date: "Jun 24",
-    url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/6958383111/BM+SDK+pipeline+for+Q3?focusedCommentId=6959890449",
-    urgent: false,
-  },
-]
-
-const CONFLUENCE_PAGES: ConfluencePage[] = [
-  { id: "p1", title: "Customer Advisory Board (CAB) — Barcelona October 2026", space: "MGP",           date: "Aug 5",  url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/7113637919" },
-  { id: "p2", title: "Marketing Team Homepage",                                 space: "MGP",           date: "Aug 3",  url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/7086866474" },
-  { id: "p3", title: "Q3 2026 Marketing Strategy",                              space: "MGP",           date: "Jul 30", url: "https://appodeal.atlassian.net/wiki/spaces/MGP/pages/7091486800" },
-  { id: "p4", title: "New Registrations Onboarding",                            space: "Appodeal Acc.", date: "Jul 21", url: "https://appodeal.atlassian.net/wiki/spaces/AP1/pages/7061045252" },
-]
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-type JiraFilter = "all" | "active" | "todo" | "done"
-type SectionFilter = "all" | "jira" | "confluence"
-
-function statusMeta(status: JiraStatus) {
+function statusStyle(status: JiraStatus) {
   switch (status) {
-    case "In Progress": return { label: "In Progress", cls: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",    icon: <Clock className="size-3" /> }
-    case "To Do":       return { label: "To Do",       cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20", icon: <Circle className="size-3" /> }
-    case "Open":        return { label: "Open",        cls: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20", icon: <Circle className="size-3" /> }
-    case "Done":        return { label: "Done",        cls: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20", icon: <CheckCircle2 className="size-3" /> }
+    case "In Progress": return "bg-blue-500/10 text-blue-500 border-blue-500/20"
+    case "To Do":
+    case "Open":        return "bg-amber-500/10 text-amber-500 border-amber-500/20"
+    case "Done":        return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
   }
 }
 
-function pill(active: boolean) {
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1)  return "just now"
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
+function filterPill(active: boolean) {
   return `text-xs px-3 py-1 rounded-full border transition-colors cursor-pointer ${
     active
       ? "bg-foreground text-background border-foreground"
@@ -153,226 +51,250 @@ function pill(active: boolean) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function JiraCard({ task }: { task: JiraTask }) {
-  const meta = statusMeta(task.status)
+function JiraRow({ task }: { task: JiraTask }) {
   return (
-    <Card className="px-4 py-3 flex items-center gap-3 group">
-      <div className="flex-1 min-w-0 space-y-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-mono font-semibold text-muted-foreground shrink-0">{task.key}</span>
-          <Badge className={`${meta.cls} flex items-center gap-1`}>
-            {meta.icon}
-            {meta.label}
-          </Badge>
-          {task.type === "Sub-task" && (
-            <Badge className="bg-muted text-muted-foreground border-border text-[10px]">sub-task</Badge>
-          )}
-        </div>
-        <p className="text-sm font-medium leading-snug truncate">{task.summary}</p>
-      </div>
-      <div className="flex items-center gap-3 shrink-0">
-        <span className="text-xs text-muted-foreground hidden sm:block">{task.updated}</span>
-        <a
-          href={`${JIRA_BASE}/${task.key}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-        >
-          <ExternalLink className="size-3.5" />
-        </a>
-      </div>
-    </Card>
+    <div className="grid items-center border-b border-border last:border-0"
+         style={{ gridTemplateColumns: "52px 1fr 100px 54px 20px" }}>
+      <span className="py-2 pl-3 text-[10px] font-mono font-semibold text-blue-500 shrink-0">{task.key}</span>
+      <span className="py-2 pr-3 text-sm truncate">{task.summary}</span>
+      <span className="py-2">
+        <Badge className={`${statusStyle(task.status)} text-[10px]`}>{task.status}</Badge>
+      </span>
+      <span className="py-2 text-xs text-muted-foreground">{task.updated}</span>
+      <a
+        href={`${JIRA_BASE}/${task.key}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="py-2 pr-3 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ExternalLink className="size-3" />
+      </a>
+    </div>
   )
 }
 
-function CommentCard({ comment }: { comment: ConfluenceComment }) {
+function ActionCard({ comment }: { comment: ConfluenceComment }) {
   return (
-    <Card className="px-4 py-3 space-y-2 group">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <MessageSquare className="size-3.5 text-muted-foreground shrink-0" />
-          <span className="text-xs font-semibold text-foreground truncate">{comment.page}</span>
-          {comment.urgent && (
-            <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 text-[10px] shrink-0">
-              action needed
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-muted-foreground">{comment.date}</span>
-          <a
-            href={comment.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-          >
-            <ExternalLink className="size-3.5" />
-          </a>
-        </div>
+    <div className="flex-1 bg-card border border-red-500/20 rounded-md p-3 space-y-1.5">
+      <p className="text-xs font-semibold truncate">{comment.page}</p>
+      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">{comment.snippet}</p>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] text-muted-foreground/60">{comment.author} · {comment.date}</span>
+        <a href={comment.url} target="_blank" rel="noopener noreferrer"
+           className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+          Open <ExternalLink className="size-2.5" />
+        </a>
       </div>
-      <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">{comment.snippet}</p>
-      <p className="text-xs text-muted-foreground/60">by {comment.author}</p>
-    </Card>
+    </div>
   )
 }
 
-function PageCard({ page }: { page: ConfluencePage }) {
+function CommentRow({ comment }: { comment: ConfluenceComment }) {
   return (
-    <Card className="px-4 py-3 flex items-center gap-3 group">
-      <FileText className="size-4 text-muted-foreground shrink-0" />
-      <div className="flex-1 min-w-0 space-y-0.5">
-        <p className="text-sm font-medium leading-snug truncate">{page.title}</p>
-        <p className="text-xs text-muted-foreground">{page.space}</p>
+    <div className="px-3 py-2 border-b border-border last:border-0">
+      <div className="flex items-center justify-between gap-2 mb-0.5">
+        <span className="text-xs font-medium truncate">💬 {comment.page}</span>
+        <span className="text-[10px] text-muted-foreground shrink-0">{comment.date}</span>
       </div>
-      <div className="flex items-center gap-3 shrink-0">
-        <span className="text-xs text-muted-foreground hidden sm:block">{page.date}</span>
-        <a
-          href={page.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-        >
-          <ExternalLink className="size-3.5" />
+      <div className="flex items-end justify-between gap-2">
+        <p className="text-xs text-muted-foreground line-clamp-1">{comment.snippet}</p>
+        <a href={comment.url} target="_blank" rel="noopener noreferrer"
+           className="text-muted-foreground hover:text-foreground shrink-0">
+          <ExternalLink className="size-3" />
         </a>
       </div>
-    </Card>
+    </div>
+  )
+}
+
+function PageRow({ page }: { page: ConfluencePage }) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-border last:border-0">
+      <span className="text-sm opacity-50 shrink-0">📄</span>
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium truncate">{page.title}</p>
+        <p className="text-[10px] text-muted-foreground">{page.space} · {page.date}</p>
+      </div>
+      <a href={page.url} target="_blank" rel="noopener noreferrer"
+         className="text-muted-foreground hover:text-foreground shrink-0">
+        <ExternalLink className="size-3" />
+      </a>
+    </div>
+  )
+}
+
+function TableSkeleton() {
+  return (
+    <div className="border border-border rounded-lg overflow-hidden animate-pulse">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div key={i} className="flex gap-3 items-center px-3 py-2.5 border-b border-border last:border-0">
+          <div className="h-3 w-10 bg-muted rounded" />
+          <div className="h-3 flex-1 bg-muted rounded" />
+          <div className="h-5 w-20 bg-muted rounded-full" />
+          <div className="h-3 w-10 bg-muted rounded" />
+        </div>
+      ))}
+    </div>
   )
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProjectWorkspacePage() {
-  const [section,    setSection]    = useState<SectionFilter>("all")
+  const [data,       setData]       = useState<WorkspaceData | null>(null)
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState<string | null>(null)
   const [jiraFilter, setJiraFilter] = useState<JiraFilter>("active")
 
-  const activeJira = JIRA_TASKS.filter((t) => t.status === "In Progress").length
-  const todoJira   = JIRA_TASKS.filter((t) => t.status === "To Do" || t.status === "Open").length
-  const urgentMentions = CONFLUENCE_COMMENTS.filter((c) => c.urgent).length
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch("/api/workspace")
+      if (res.status === 401) {
+        const json = await res.json()
+        setError(json.error ?? "Atlassian credentials not configured.")
+        return
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setData(await res.json())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  const filteredJira = JIRA_TASKS.filter((t) => {
+  useEffect(() => { load() }, [load])
+
+  const urgentComments  = data?.comments.filter((c) => c.urgent)  ?? []
+  const otherComments   = data?.comments.filter((c) => !c.urgent) ?? []
+
+  const filteredTasks = (data?.tasks ?? []).filter((t) => {
     if (jiraFilter === "active") return t.status === "In Progress"
     if (jiraFilter === "todo")   return t.status === "To Do" || t.status === "Open"
-    if (jiraFilter === "done")   return t.status === "Done"
-    return true
+    return t.status === "Done"
   })
 
-  const showJira       = section === "all" || section === "jira"
-  const showConfluence = section === "all" || section === "confluence"
+  const taskCounts = {
+    active: (data?.tasks ?? []).filter((t) => t.status === "In Progress").length,
+    todo:   (data?.tasks ?? []).filter((t) => t.status === "To Do" || t.status === "Open").length,
+    done:   (data?.tasks ?? []).filter((t) => t.status === "Done").length,
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
 
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Project Workspace</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Jira tasks and Confluence mentions assigned to or tagged with you
-          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">Your Jira tasks · Confluence mentions</p>
         </div>
-        <a
-          href="https://appodeal.atlassian.net/jira/software/projects/GT/boards"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Button size="sm" variant="outline" className="gap-2">
-            <Plus className="size-3.5" />
-            New Jira Task
-          </Button>
-        </a>
-      </div>
-
-      {/* KPI strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {[
-          { label: "In Progress",        value: activeJira,                            color: "text-blue-500"    },
-          { label: "To Do / Open",        value: todoJira,                              color: "text-amber-500"   },
-          { label: "Confluence Mentions", value: CONFLUENCE_COMMENTS.length + CONFLUENCE_PAGES.length, color: "text-foreground"  },
-          { label: "Action Needed",       value: urgentMentions,                        color: "text-red-500"     },
-        ].map(({ label, value, color }) => (
-          <Card key={label} className="px-4 py-3">
-            <p className={`text-2xl font-bold tabular-nums ${color}`}>{value}</p>
-            <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
-          </Card>
-        ))}
-      </div>
-
-      {/* Section filter */}
-      <div className="flex gap-1.5">
-        {(["all", "jira", "confluence"] as SectionFilter[]).map((s) => (
-          <button key={s} onClick={() => setSection(s)} className={pill(section === s)}>
-            {s === "all" ? "All" : s === "jira" ? "Jira Tasks" : "Confluence"}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Jira Tasks ─────────────────────────────────────────────────────── */}
-      {showJira && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Jira Tasks</h2>
-            <div className="flex gap-1.5">
-              {(["active", "todo", "done", "all"] as JiraFilter[]).map((f) => (
-                <button key={f} onClick={() => setJiraFilter(f)} className={pill(jiraFilter === f)}>
-                  {f === "active" ? "In Progress" : f === "todo" ? "To Do" : f === "done" ? "Done" : "All"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {filteredJira.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground border border-dashed rounded-xl">
-              No tasks in this filter
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {filteredJira.map((task) => (
-                <JiraCard key={task.key} task={task} />
-              ))}
-            </div>
+        <div className="flex items-center gap-2">
+          {data && (
+            <span className="text-xs text-muted-foreground border border-border rounded-full px-3 py-1">
+              ↻ {relativeTime(data.fetchedAt)}
+            </span>
           )}
+          <Button size="sm" variant="ghost" onClick={load} disabled={loading}>
+            <RefreshCw className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+          <a href="https://appodeal.atlassian.net/jira/software/projects/GT/boards"
+             target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <Plus className="size-3.5" /> New Task
+            </Button>
+          </a>
+        </div>
+      </div>
+
+      {/* Error / setup prompt */}
+      {error && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+          <AlertTriangle className="size-4 text-amber-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-amber-600 dark:text-amber-400">Could not load workspace data</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{error}</p>
+          </div>
         </div>
       )}
 
-      {/* ── Confluence Mentions ────────────────────────────────────────────── */}
-      {showConfluence && (
-        <div className="space-y-6">
+      {/* Action Needed */}
+      {!loading && urgentComments.length > 0 && (
+        <div className="rounded-lg border border-red-500/25 bg-red-500/5 p-3 space-y-2">
+          <p className="text-[10px] font-bold tracking-widest text-red-500 uppercase">
+            Action Needed · {urgentComments.length}
+          </p>
+          <div className="flex gap-3">
+            {urgentComments.map((c) => <ActionCard key={c.id} comment={c} />)}
+          </div>
+        </div>
+      )}
 
-          {/* Action needed */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">Action Needed</h2>
-              <Badge className="bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">{urgentMentions}</Badge>
-            </div>
-            <div className="space-y-2">
-              {CONFLUENCE_COMMENTS.filter((c) => c.urgent).map((c) => (
-                <CommentCard key={c.id} comment={c} />
+      {/* Jira Tasks */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">My Jira Tasks</h2>
+          <div className="flex gap-1.5">
+            {(["active", "todo", "done"] as JiraFilter[]).map((f) => (
+              <button key={f} onClick={() => setJiraFilter(f)} className={filterPill(jiraFilter === f)}>
+                {f === "active" ? `Active (${taskCounts.active})` : f === "todo" ? `To Do (${taskCounts.todo})` : `Done (${taskCounts.done})`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? <TableSkeleton /> : (
+          <div className="border border-border rounded-lg overflow-hidden">
+            {/* Column headers */}
+            <div className="grid bg-muted/50 border-b border-border px-0"
+                 style={{ gridTemplateColumns: "52px 1fr 100px 54px 20px" }}>
+              {["KEY", "SUMMARY", "STATUS", "UPDATED", ""].map((h) => (
+                <span key={h} className="py-1.5 pl-3 text-[9px] font-semibold tracking-widest text-muted-foreground uppercase">
+                  {h}
+                </span>
               ))}
             </div>
-          </div>
 
-          {/* Other comments */}
-          <div className="space-y-3">
-            <h2 className="text-sm font-semibold">Other Comments</h2>
-            <div className="space-y-2">
-              {CONFLUENCE_COMMENTS.filter((c) => !c.urgent).map((c) => (
-                <CommentCard key={c.id} comment={c} />
-              ))}
+            {filteredTasks.length === 0 ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">No tasks in this filter</div>
+            ) : (
+              filteredTasks.map((t) => <JiraRow key={t.key} task={t} />)
+            )}
+
+            <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground border-t border-border">
+              Showing {filteredTasks.length} task{filteredTasks.length !== 1 ? "s" : ""} ·{" "}
+              <a href="https://appodeal.atlassian.net/jira/software/projects/GT/boards"
+                 target="_blank" rel="noopener noreferrer"
+                 className="underline underline-offset-2 hover:text-foreground">
+                View board ↗
+              </a>
             </div>
           </div>
+        )}
+      </div>
 
-          {/* Pages */}
-          <div className="space-y-3">
+      {/* Bottom strip: pages + other comments */}
+      {!loading && (data?.pages.length || otherComments.length) ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <div className="space-y-2">
             <h2 className="text-sm font-semibold">Pages Mentioning You</h2>
-            <div className="space-y-2">
-              {CONFLUENCE_PAGES.map((p) => (
-                <PageCard key={p.id} page={p} />
-              ))}
+            <div className="border border-border rounded-lg overflow-hidden">
+              {(data?.pages ?? []).map((p) => <PageRow key={p.id} page={p} />)}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-sm font-semibold">Other Comments</h2>
+            <div className="border border-border rounded-lg overflow-hidden">
+              {otherComments.map((c) => <CommentRow key={c.id} comment={c} />)}
             </div>
           </div>
 
         </div>
-      )}
+      ) : null}
 
     </div>
   )
