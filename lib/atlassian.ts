@@ -1,18 +1,20 @@
 // lib/atlassian.ts
 
-const BASE   = process.env.ATLASSIAN_BASE_URL   ?? ""
-const EMAIL  = process.env.ATLASSIAN_EMAIL       ?? ""
-const TOKEN  = process.env.ATLASSIAN_API_TOKEN   ?? ""
-const ACCT   = process.env.ATLASSIAN_ACCOUNT_ID  ?? ""
+const ACCT = process.env.ATLASSIAN_ACCOUNT_ID ?? ""
 
-function authHeader() {
-  return "Basic " + Buffer.from(`${EMAIL}:${TOKEN}`).toString("base64")
+const URGENT_CONFLUENCE_SPACE = "MGP"
+
+function authHeader(email: string, token: string) {
+  return "Basic " + Buffer.from(`${email}:${token}`).toString("base64")
 }
 
-async function atlassianFetch(path: string) {
-  const res = await fetch(`${BASE}${path}`, {
+async function atlassianFetch(path: string): Promise<unknown> {
+  const base  = process.env.ATLASSIAN_BASE_URL  ?? ""
+  const email = process.env.ATLASSIAN_EMAIL      ?? ""
+  const token = process.env.ATLASSIAN_API_TOKEN  ?? ""
+  const res = await fetch(`${base}${path}`, {
     headers: {
-      Authorization: authHeader(),
+      Authorization: authHeader(email, token),
       Accept: "application/json",
     },
     next: { revalidate: 120 }, // 2-minute cache
@@ -57,16 +59,14 @@ export async function fetchMyJiraTasks(): Promise<JiraTask[]> {
   const jql = encodeURIComponent(
     "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC"
   )
-  const data = await atlassianFetch(
-    `/rest/api/3/search?jql=${jql}&fields=summary,status,issuetype,updated&maxResults=50`
-  )
-
   const doneJql = encodeURIComponent(
     "assignee = currentUser() AND statusCategory = Done ORDER BY updated DESC"
   )
-  const doneData = await atlassianFetch(
-    `/rest/api/3/search?jql=${doneJql}&fields=summary,status,issuetype,updated&maxResults=20`
-  )
+
+  const [data, doneData] = await Promise.all([
+    atlassianFetch(`/rest/api/3/search?jql=${jql}&fields=summary,status,issuetype,updated&maxResults=50`),
+    atlassianFetch(`/rest/api/3/search?jql=${doneJql}&fields=summary,status,issuetype,updated&maxResults=20`),
+  ]) as [any, any]
 
   return [...data.issues, ...doneData.issues].map((issue: any) => ({
     key: issue.key,
@@ -92,7 +92,7 @@ export async function fetchMyConfluenceComments(): Promise<ConfluenceComment[]> 
   )
   const data = await atlassianFetch(
     `/wiki/rest/api/search?cql=${cql}&limit=20&expand=content.space,content.history`
-  )
+  ) as any
 
   const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000
 
@@ -105,8 +105,8 @@ export async function fetchMyConfluenceComments(): Promise<ConfluenceComment[]> 
       snippet: r.excerpt?.replace(/<[^>]+>/g, "").trim() ?? "",
       author: r.content?.history?.createdBy?.displayName ?? "Unknown",
       date: formatDate(created.toISOString()),
-      url: `${BASE}/wiki${r.content?._links?.webui ?? ""}`,
-      urgent: created.getTime() > fourteenDaysAgo && spaceKey === "MGP",
+      url: `${process.env.ATLASSIAN_BASE_URL ?? ""}/wiki${r.content?._links?.webui ?? ""}`,
+      urgent: created.getTime() > fourteenDaysAgo && spaceKey === URGENT_CONFLUENCE_SPACE,
     }
   })
 }
@@ -117,20 +117,22 @@ export async function fetchMyConfluencePages(): Promise<ConfluencePage[]> {
   )
   const data = await atlassianFetch(
     `/wiki/rest/api/search?cql=${cql}&limit=10&expand=space`
-  )
+  ) as any
 
   return (data.results ?? []).map((r: any) => ({
     id: r.content?.id ?? r.id,
     title: r.title ?? "Untitled",
     space: r.space?.name ?? r.content?.space?.name ?? "",
     date: formatDate(r.lastModified),
-    url: `${BASE}/wiki${r._links?.webui ?? ""}`,
+    url: `${process.env.ATLASSIAN_BASE_URL ?? ""}/wiki${r._links?.webui ?? ""}`,
   }))
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | undefined | null): string {
+  if (!iso) return "—"
   const d = new Date(iso)
+  if (isNaN(d.getTime())) return "—"
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "short" })
 }
