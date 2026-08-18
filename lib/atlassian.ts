@@ -1,4 +1,5 @@
 // lib/atlassian.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const URGENT_CONFLUENCE_SPACE = "MGP"
 
