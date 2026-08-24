@@ -1,5 +1,0 @@
-{"type":"server-started","port":50894,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:50894","screen_dir":"/Users/radustoia/outbound-attribution/.superpowers/brainstorm/94155-1787050127/content","state_dir":"/Users/radustoia/outbound-attribution/.superpowers/brainstorm/94155-1787050127/state"}
-{"type":"screen-added","file":"/Users/radustoia/outbound-attribution/.superpowers/brainstorm/94155-1787050127/content/layout-options.html"}
-{"type":"screen-added","file":"/Users/radustoia/outbound-attribution/.superpowers/brainstorm/94155-1787050127/content/waiting-1.html"}
-{"type":"screen-added","file":"/Users/radustoia/outbound-attribution/.superpowers/brainstorm/94155-1787050127/content/workspace-mockup.html"}
-{"type":"server-stopped","reason":"idle timeout"}

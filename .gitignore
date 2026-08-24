@@ -34,6 +34,11 @@ pnpm-debug.log*
 # generated files
 .bug-issues.json
 .g2-weekly-report.json
+.agents-state.json
+.attribution-cache.json
+.campaigns-weekly-report.json
+.weekly-report.json
+.superpowers/
 
 # typescript
 *.tsbuildinfo
