@@ -103,7 +103,7 @@ export async function GET() {
     const lastMondayStr = lastMonday.toISOString().split("T")[0]
 
     // Current quarter: deals created this quarter that are now Approved or Live
-    const [qtdDeals, curAll, prevDeals, prevAll] = await Promise.all([
+    const [qtdDeals, curAll, prevDeals, prevAll, hsQtdDeals] = await Promise.all([
       searchDeals(
         [
           { propertyName: "pipeline",   operator: "EQ", value: PIPELINE },
@@ -139,6 +139,16 @@ export async function GET() {
         ],
         ["createdate"]
       ),
+      // HubSpot-style QTD: deals that entered New Registration this quarter with bm__account_approval=Approved
+      // Matches the HubSpot dashboard filter (includes indirect pipeline 961280)
+      searchDeals(
+        [
+          { propertyName: "pipeline",                    operator: "IN",  values: [PIPELINE, "961280"] },
+          { propertyName: "bm__account_approval",        operator: "EQ",  value: "Approved" },
+          { propertyName: "hs_v2_date_entered_107224653", operator: "GTE", value: curStart },
+        ],
+        ["normalised_dau__us_dau__tier_1__065"]
+      ),
     ])
 
     const prevQNormDau = prevDeals.reduce(
@@ -147,6 +157,11 @@ export async function GET() {
     )
 
     const qtdNormDau = qtdDeals.reduce(
+      (sum, d) => sum + (parseFloat(d.properties.normalised_dau__us_dau__tier_1__065 ?? "0") || 0),
+      0
+    )
+
+    const hsQtdNormDau = hsQtdDeals.reduce(
       (sum, d) => sum + (parseFloat(d.properties.normalised_dau__us_dau__tier_1__065 ?? "0") || 0),
       0
     )
@@ -178,6 +193,7 @@ export async function GET() {
       currentQuarter,
       prevQuarter,
       qtdNormDau:       Math.round(qtdNormDau),
+      hsQtdNormDau:     Math.round(hsQtdNormDau),
       prevQNormDau:     Math.round(prevQNormDau),
       thisWeekNormDau:  Math.round(thisWeekNormDau),
       prevWeekNormDau:  Math.round(prevWeekNormDau),

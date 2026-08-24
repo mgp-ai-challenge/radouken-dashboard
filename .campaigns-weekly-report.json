@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-06-08T15:56:15.802Z",
+  "weekLabel": "W24 · Jun 8–Jun 14 2026",
+  "kpis": {
+    "nc": {
+      "sent": 1163,
+      "openRate": 0.5021496130696474,
+      "replyRate": 0.109072375127421,
+      "mqls": 0,
+      "sqls": 0
+    },
+    "cu": {
+      "sent": 1097,
+      "openRate": 0.528714676390155,
+      "replyRate": 0.09566184649610679,
+      "mqls": 0,
+      "sqls": 0
+    },
+    "inbound": {
+      "sent": 1497,
+      "openRate": 0.3393453573814295,
+      "clickRate": 0.04008016032064128,
+      "matched": 0
+    },
+    "totalTrickyOpps": 48
+  },
+  "repliedCompanies": {
+    "nc": [],
+    "cu": [],
+    "inbound": []
+  },
+  "insights": "# Weekly Campaigns Report | BidMachine\n\n### Summary\nCampaign engagement remains flat across all channels with zero conversion to qualified leads. The NC Campaign shows the strongest performance with 50.2% open rate and 10.9% reply rate, outpacing the CU Campaign (52.9% open, 9.6% reply) on reply conversion despite similar audience size. The Inbound Campaign significantly underperforms with only 33.9% open rate and 4.0% click rate, indicating messaging or targeting misalignment.\n\n### Reply Signals\nNo companies replied to any campaign this week (NC, CU, or Inbound). With 3,757 total contacts sent, zero reply conversions to named accounts represents a critical disconnect between engagement metrics and actual business response. This suggests replies may not be reaching decision-makers or content lacks sufficient relevance to trigger action.\n\n### Pipeline Impact\n- **MQLs:** 0 (target coverage unmet)\n- **SQLs:** 0 (no pipeline progression)\n- **Tricky Opps Coverage:** 0% (0 of 48 EMEA opportunities matched)\n- **Inbound Match Rate:** 0% (0 of 1,497 contacts matched to inbound deals)\n\nThe lack of pipeline contribution across all campaigns indicates a fundamental gap between open/click metrics and qualified lead generation. The Tricky Opps segment remains entirely uncovered, representing immediate risk to forecast.\n\n### Recommendations\n1. **Audit reply capture process:** Investigate whether replies are being received, properly tracked, and routed. High open/reply rates with zero named companies suggests technical or operational breakdown rather than audience disengagement.\n\n2. **Refresh Inbound Campaign messaging:** The 33.9% open rate signals poor subject line performance. Conduct A/B testing on top-performing subject lines from NC/CU campaigns and realign content to inbound segment pain points.\n\n3. **Prioritize Tricky Opps matching:** Immediately map the 48 EMEA Tricky Opps to active campaigns. With zero coverage, this segment is being ignored. Assign these accounts to NC or CU campaigns with personalized outreach."
+}

@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-06-15T15:02:11.306Z",
+  "weekLabel": "W25 · Jun 15–Jun 21 2026",
+  "kpis": {
+    "qtdNormDau": 462335,
+    "q1NormDau": 660238,
+    "thisWeekNormDau": 1990,
+    "prevWeekNormDau": 117940,
+    "q2Submissions": 352,
+    "q1Submissions": 280,
+    "apacNormDau": 87325,
+    "q1ApacNormDau": 101243
+  },
+  "insights": "### Summary\nThis week shows severe performance deterioration with DAU collapsing 98% WoW to 1,990, indicating a critical operational issue beyond normal variance. While Q2 submissions are up 26% versus Q1, approval rates have plummeted to 10% in May—less than half of Q1's average—creating a bottleneck that's starving the pipeline.\n\n### What's Working\n- **Q2 submission growth:** 352 submissions represents 26% growth versus Q1's 280, indicating steady publisher interest despite platform challenges.\n- **Approved pipeline depth:** 361,167 DAU across 26 approved deals provides runway for recovery once operational issues resolve.\n- **Business segment traction:** 196 business email signups in Q2 demonstrate continued enterprise interest.\n\n### What's Not Working\n- **Catastrophic DAU decline:** Weekly DAU dropped from 117,940 to 1,990 (-98%), signaling either a technical outage, data tracking error, or mass publisher churn requiring immediate investigation.\n- **May approval rate collapse:** Approval rates fell to 10% in May from 22% in March—a 55% decline that's creating a severe verification bottleneck with 19,816 DAU stuck in Pending Verification.\n- **APAC underperformance:** 87,325 DAU is 13% below Q1 and 71% short of the 300,000 target, indicating regional strategy misalignment or competitive pressure.\n\n### Recommendations\n1. **Immediately audit DAU tracking and publisher status.** The 98% WoW collapse suggests either a technical failure in data collection or unannounced publisher offboarding. Confirm data integrity before proceeding.\n2. **Investigate May approval process degradation.** With May at 10% versus March's 22%, identify bottlenecks in the Verification stage (19,816 DAU pending). Allocate resources to clear this backlog within 7 days.\n3. **Develop APAC recovery plan.** Current trajectory (87K vs 300K target) requires targeted publisher acquisition or product localization. Prioritize this region with dedicated resources given the 71% gap."
+}

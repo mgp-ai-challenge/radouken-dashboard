@@ -57,6 +57,7 @@ type KpisData = {
   currentQuarter:      string
   prevQuarter:         string
   qtdNormDau:          number
+  hsQtdNormDau:        number
   prevQNormDau:        number
   thisWeekNormDau:     number
   prevWeekNormDau:     number
@@ -1057,11 +1058,28 @@ export function SelfServeDashboard() {
                 Icon={Target}
                 progress={kpis.qtdNormDau / qtdTarget}
                 sub={
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
-                    <DeltaChip current={kpis.qtdNormDau} prev={kpis.prevQNormDau} label="QoQ" />
-                    <span style={{ fontSize: "11px", color: C.muted }}>
-                      vs {kpis.prevQuarter} {fmtDau(kpis.prevQNormDau)}
-                    </span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginTop: "2px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <DeltaChip current={kpis.qtdNormDau} prev={kpis.prevQNormDau} label="QoQ" />
+                      <span style={{ fontSize: "11px", color: C.muted }}>
+                        vs {kpis.prevQuarter} {fmtDau(kpis.prevQNormDau)}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "10px", color: C.muted }}>
+                        HS view:
+                      </span>
+                      <span style={{ fontSize: "11px", fontFamily: MONO, fontWeight: 600, color: C.slate }}>
+                        {fmtDau(kpis.hsQtdNormDau)}
+                      </span>
+                      <span style={{
+                        fontSize: "10px",
+                        color: kpis.qtdNormDau >= kpis.hsQtdNormDau ? C.accent : C.red,
+                        fontFamily: MONO,
+                      }}>
+                        {kpis.qtdNormDau >= kpis.hsQtdNormDau ? "+" : ""}{fmtDau(kpis.qtdNormDau - kpis.hsQtdNormDau)} vs HS
+                      </span>
+                    </div>
                   </div>
                 }
               />

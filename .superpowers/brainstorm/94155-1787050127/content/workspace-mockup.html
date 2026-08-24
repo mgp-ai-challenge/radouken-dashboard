@@ -1,0 +1,129 @@
+<h2>Workspace Page — Proposed Design</h2>
+<p class="subtitle">Does this feel right? Let me know what to adjust.</p>
+
+<div class="mockup" style="max-width: 860px; margin: 0 auto;">
+  <div class="mockup-header">Project Workspace · Live preview</div>
+  <div class="mockup-body" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+
+    <!-- Header row -->
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <div style="font-size: 18px; font-weight: 700; color: var(--fg);">Project Workspace</div>
+        <div style="font-size: 11px; color: var(--fg-muted); margin-top: 2px;">Your Jira tasks · Confluence mentions</div>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <div style="font-size: 10px; color: var(--fg-muted); padding: 3px 8px; border: 1px solid var(--border); border-radius: 20px;">↻ Refreshed 2 min ago</div>
+        <div style="font-size: 10px; color: var(--fg); padding: 3px 10px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer;">+ New Task</div>
+      </div>
+    </div>
+
+    <!-- ⚡ Action Needed Banner -->
+    <div style="background: #ef444410; border: 1px solid #ef444430; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+        <span style="font-size: 10px; font-weight: 700; color: #f87171; letter-spacing: 0.05em;">⚡ ACTION NEEDED · 2 mentions</span>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: stretch;">
+        <div style="flex: 1; background: var(--bg-card); border: 1px solid #ef444425; border-radius: 6px; padding: 8px 10px;">
+          <div style="font-size: 10px; font-weight: 600; color: var(--fg); margin-bottom: 3px;">Q3 content and comms plan</div>
+          <div style="font-size: 10px; color: var(--fg-muted); line-height: 1.5;">Mark wants us to get this promotion up and running sooner — let's discuss getting something together in the next couple of weeks.</div>
+          <div style="font-size: 9px; color: var(--fg-muted); margin-top: 4px; opacity: 0.6;">Ryan Barrett · Aug 4 → <span style="text-decoration: underline; cursor: pointer;">Open ↗</span></div>
+        </div>
+        <div style="flex: 1; background: var(--bg-card); border: 1px solid #ef444425; border-radius: 6px; padding: 8px 10px;">
+          <div style="font-size: 10px; font-weight: 600; color: var(--fg); margin-bottom: 3px;">Q3 content and comms plan</div>
+          <div style="font-size: 10px; color: var(--fg-muted); line-height: 1.5;">Speak to Radu about doing some sort of email promotion if we can (not required, but let's see if it makes sense).</div>
+          <div style="font-size: 9px; color: var(--fg-muted); margin-top: 4px; opacity: 0.6;">Ryan Barrett · Aug 4 → <span style="text-decoration: underline; cursor: pointer;">Open ↗</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Jira Tasks -->
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--fg);">My Jira Tasks</div>
+        <div style="display: flex; gap: 4px;">
+          <span style="font-size: 10px; padding: 2px 8px; border-radius: 20px; background: var(--fg); color: var(--bg); border: 1px solid var(--border); cursor: pointer;">Active</span>
+          <span style="font-size: 10px; padding: 2px 8px; border-radius: 20px; color: var(--fg-muted); border: 1px solid var(--border); cursor: pointer;">To Do</span>
+          <span style="font-size: 10px; padding: 2px 8px; border-radius: 20px; color: var(--fg-muted); border: 1px solid var(--border); cursor: pointer;">Done</span>
+        </div>
+      </div>
+
+      <!-- Task rows — compact table style -->
+      <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+        <!-- Header -->
+        <div style="display: grid; grid-template-columns: 52px 1fr 90px 54px 20px; gap: 0; padding: 5px 12px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);">
+          <span style="font-size: 9px; color: var(--fg-muted); font-weight: 600; letter-spacing: 0.05em;">KEY</span>
+          <span style="font-size: 9px; color: var(--fg-muted); font-weight: 600; letter-spacing: 0.05em;">SUMMARY</span>
+          <span style="font-size: 9px; color: var(--fg-muted); font-weight: 600; letter-spacing: 0.05em;">STATUS</span>
+          <span style="font-size: 9px; color: var(--fg-muted); font-weight: 600; letter-spacing: 0.05em;">UPDATED</span>
+          <span></span>
+        </div>
+        <!-- Rows -->
+        ${[
+          ["GT-25", "Flyers and Tabletents for the Whitepaper", "In Progress", "Aug 12"],
+          ["GT-10", "Digital Account Completion", "In Progress", "Jul 23"],
+          ["GT-2",  "Publisher Sign up page optimisation", "In Progress", "Jul 23"],
+          ["GT-4",  "Review & change the copy of the form", "In Progress", "Jul 23"],
+          ["GT-1",  "Budget Spent TD", "In Progress", "Jul 23"],
+          ["GT-9",  "DMEXCO 2026", "In Progress", "Jun 29"],
+        ].map(([key, summary, status, updated], i) => `
+        <div style="display: grid; grid-template-columns: 52px 1fr 90px 54px 20px; gap: 0; padding: 7px 12px; background: var(--bg-card); border-bottom: 1px solid var(--border); align-items: center;">
+          <span style="font-size: 10px; font-family: monospace; color: #60a5fa; font-weight: 600;">${key}</span>
+          <span style="font-size: 11px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 12px;">${summary}</span>
+          <span style="font-size: 9px; padding: 2px 7px; border-radius: 10px; background: #3b82f618; color: #60a5fa; border: 1px solid #3b82f630; width: fit-content;">${status}</span>
+          <span style="font-size: 10px; color: var(--fg-muted);">${updated}</span>
+          <span style="font-size: 10px; color: var(--fg-muted); cursor: pointer;">↗</span>
+        </div>`).join('')}
+        <div style="padding: 6px 12px; background: var(--bg-secondary); font-size: 10px; color: var(--fg-muted);">
+          Showing 6 active tasks · <span style="text-decoration: underline; cursor: pointer;">View in Jira ↗</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom: Confluence pages + other comments side by side -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+
+      <!-- Recent Pages -->
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--fg);">Pages Mentioning You</div>
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+          ${[
+            ["Customer Advisory Board (CAB) — Barcelona Oct 2026", "MGP", "Aug 5"],
+            ["Marketing Team Homepage", "MGP", "Aug 3"],
+            ["Q3 2026 Marketing Strategy", "MGP", "Jul 30"],
+            ["New Registrations Onboarding", "Appodeal Acc.", "Jul 21"],
+          ].map(([title, space, date]) => `
+          <div style="display: flex; align-items: center; gap: 8px; padding: 7px 10px; background: var(--bg-card); border-bottom: 1px solid var(--border);">
+            <span style="font-size: 11px; opacity: 0.5;">📄</span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 10px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${title}</div>
+              <div style="font-size: 9px; color: var(--fg-muted);">${space} · ${date}</div>
+            </div>
+            <span style="font-size: 10px; color: var(--fg-muted); cursor: pointer; flex-shrink: 0;">↗</span>
+          </div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Other Comments -->
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <div style="font-size: 12px; font-weight: 600; color: var(--fg);">Other Comments</div>
+        <div style="border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+          ${[
+            ["Marketing Team Homepage", "If we have any existing spaces for this, please add them.", "Ryan Barrett", "Jul 29"],
+            ["BidMachine SDK — Commercialisation", "Can we connect on this?", "Ryan Barrett", "Jul 16"],
+            ["BM SDK pipeline for Q3", "FYI", "Ian Rooney", "Jun 24"],
+          ].map(([page, snippet, author, date]) => `
+          <div style="padding: 7px 10px; background: var(--bg-card); border-bottom: 1px solid var(--border);">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+              <span style="font-size: 10px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">💬 ${page}</span>
+              <span style="font-size: 9px; color: var(--fg-muted); flex-shrink: 0; margin-left: 4px;">${date}</span>
+            </div>
+            <div style="font-size: 10px; color: var(--fg-muted); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${snippet}</div>
+            <div style="font-size: 9px; color: var(--fg-muted); opacity: 0.6; margin-top: 2px;">${author} → <span style="text-decoration: underline; cursor: pointer;">Open ↗</span></div>
+          </div>`).join('')}
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
