@@ -1,285 +1,378 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Badge } from "@/components/ui/badge"
-import { Card } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { shellFilterChip } from "@/lib/utils"
+import { useEffect, useState, useCallback } from "react"
 
-const DEFAULT_CAMPAIGN_ID = "cam_DFsfaAarRiRXySWPS"
-const DEFAULT_CAMPAIGN_NAME = "Q1 Indirect DAU Non-BM publishers >40k US DAU"
-
-type Row = {
-  leadId: string
-  leadState: string
-  contactId: string
-  email: string
-  firstName: string
-  lastName: string
-  jobTitle: string
-  company: string
-  usdau: string
-  linkedinUrl: string
-  campaigns: string[]
-  clicked: boolean
-  bdOverlap: boolean
-  hubspot: {
-    contactId: string
-    dealStage: string | null
-    dealName: string | null
-    hubspotUrl: string | null
-  } | null
+type SelfServeKpis = {
+  currentQuarter: string
+  prevQuarter: string
+  qtdNormDau: number
+  hsQtdNormDau: number
+  prevQNormDau: number
+  thisWeekNormDau: number
+  prevWeekNormDau: number
+  currentQSubmissions: number
+  prevQSubmissions: number
+  apacNormDau: number
+  prevQApacNormDau: number
 }
 
-type Campaign = {
-  _id: string
-  name: string
-  status: string
-}
-
-const STATE_LABEL: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  emailsBounced: { label: "Bounced", variant: "destructive" },
-  emailsReplied: { label: "Replied", variant: "default" },
-  emailsClicked: { label: "Clicked", variant: "secondary" },
-  emailsOpened: { label: "Opened", variant: "secondary" },
-  emailsSent: { label: "Sent", variant: "outline" },
-  reviewed: { label: "Not Sent", variant: "outline" },
-  emailsUnsubscribed: { label: "Unsubscribed", variant: "destructive" },
-}
-
-function stateBadge(state: string) {
-  const s = STATE_LABEL[state] ?? { label: state, variant: "outline" as const }
-  return <Badge variant={s.variant}>{s.label}</Badge>
-}
-
-function dealStageBadge(stage: string | null) {
-  if (!stage) return <span className="text-xs text-muted-foreground">No deal</span>
-  const isMQL = stage === "Marketing Qualified Lead"
-  return (
-    <Badge variant={isMQL ? "default" : "secondary"} className={isMQL ? "bg-green-600 hover:bg-green-700" : ""}>
-      {stage}
-    </Badge>
-  )
-}
-
-function formatDAU(raw: string) {
-  const n = parseInt(raw?.toString().replace(/,/g, "") ?? "")
-  if (isNaN(n)) return raw || "—"
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M"
-  if (n >= 1_000) return (n / 1_000).toFixed(0) + "k"
+function fmtDau(n: number) {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M"
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "k"
   return n.toString()
 }
 
-export default function DashboardPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([])
-  const [selectedId, setSelectedId] = useState(DEFAULT_CAMPAIGN_ID)
-  const [rows, setRows] = useState<Row[]>([])
-  const [loading, setLoading] = useState(false)
-  const [stateFilter, setStateFilter] = useState<string>("all")
+// ─── SelfServe design tokens ──────────────────────────────────────────────────
+const C = {
+  bg:           "#020d07",
+  card:         "#071510",
+  cardAlt:      "#0a1d14",
+  border:       "#0e2b1d",
+  borderAccent: "rgba(5,199,155,0.18)",
+  accent:       "#05c79b",
+  accentBright: "#00e8b0",
+  accentDim:    "rgba(5,199,155,0.13)",
+  accentGlow:   "rgba(5,199,155,0.06)",
+  sage:         "#c8ddd5",
+  sageLight:    "#e8f3ef",
+  muted:        "#3d6b56",
+  slate:        "#7c8c94",
+  red:          "#ef4444",
+  redDim:       "rgba(239,68,68,0.12)",
+}
+const MONO = "'JetBrains Mono', 'Cascadia Code', 'SF Mono', ui-monospace, monospace"
 
-  useEffect(() => {
-    fetch("/api/campaigns")
+type MqlDau = {
+  mqlNormDau: number
+  dealCount: number
+}
+
+export default function DashboardPage() {
+  const [ssKpis, setSsKpis] = useState<SelfServeKpis | null>(null)
+  const [ssKpisLoading, setSsKpisLoading] = useState(true)
+  const [mqlDau, setMqlDau] = useState<MqlDau | null>(null)
+  const [mqlDauLoading, setMqlDauLoading] = useState(true)
+
+  const fetchAll = useCallback(() => {
+    setSsKpisLoading(true)
+    fetch("/api/self-serve/kpis")
       .then((r) => r.json())
-      .then((data: Campaign[]) => setCampaigns(data.filter((c) => c.status !== "draft")))
+      .then((data) => { if (!data.error) setSsKpis(data) })
       .catch(() => {})
+      .finally(() => setSsKpisLoading(false))
+
+    setMqlDauLoading(true)
+    fetch("/api/dashboard/mql-dau")
+      .then((r) => r.json())
+      .then((data) => { if (!data.error) setMqlDau(data) })
+      .catch(() => {})
+      .finally(() => setMqlDauLoading(false))
   }, [])
 
   useEffect(() => {
-    if (!selectedId) return
-    setLoading(true)
-    setRows([])
-    fetch(`/api/campaign-data?campaignId=${selectedId}`)
-      .then((r) => r.json())
-      .then((data) => setRows(data.rows ?? []))
-      .finally(() => setLoading(false))
-  }, [selectedId])
-
-  const filtered = stateFilter === "all" ? rows : rows.filter((r) => r.leadState === stateFilter)
-
-  const stats = {
-    total: rows.length,
-    sent: rows.filter((r) => !["reviewed", "emailsBounced"].includes(r.leadState)).length,
-    replied: rows.filter((r) => r.leadState === "emailsReplied").length,
-    clicked: rows.filter((r) => r.clicked).length,
-    mql: rows.filter((r) => r.hubspot?.dealStage === "Marketing Qualified Lead").length,
-    bdOverlap: rows.filter((r) => r.bdOverlap).length,
-  }
+    fetchAll()
+    const id = setInterval(fetchAll, 60_000)
+    return () => clearInterval(id)
+  }, [fetchAll])
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Header */}
-      <header className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-medium text-foreground">Outbound Attribution</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Track campaign contacts, email activity, and HubSpot deal progression.
-          </p>
-        </div>
-        <div className="w-[360px] shrink-0">
-          <Select value={selectedId} onValueChange={setSelectedId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select campaign" />
-            </SelectTrigger>
-            <SelectContent>
-              {campaigns.length === 0 && (
-                <SelectItem value={DEFAULT_CAMPAIGN_ID}>{DEFAULT_CAMPAIGN_NAME}</SelectItem>
-              )}
-              {campaigns.map((c) => (
-                <SelectItem key={c._id} value={c._id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </header>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+      {/* Self-Serve KPIs */}
+      <div style={{
+        background:   C.card,
+        border:       `1px solid ${C.border}`,
+        borderRadius: "16px",
+        padding:      "22px 26px",
+        position:     "relative",
+        overflow:     "hidden",
+        fontFamily:   "'Outfit', system-ui, sans-serif",
+      }}>
+        {/* Top shimmer line */}
+        <div style={{
+          position:   "absolute",
+          top: 0, left: "10%", right: "10%",
+          height:     "1px",
+          background: `linear-gradient(90deg, transparent, ${C.borderAccent}, transparent)`,
+          pointerEvents: "none",
+        }} />
+        {/* Left accent stripe */}
+        <div style={{
+          position:     "absolute",
+          left:         0, top: "18%", bottom: "18%",
+          width:        "3px",
+          borderRadius: "0 3px 3px 0",
+          background:   C.accent,
+          opacity:      0.9,
+        }} />
 
-      {/* Stats */}
-      <div className="grid grid-cols-6 gap-3">
-        {[
-          { label: "Total Contacts", value: stats.total },
-          { label: "Emails Sent", value: stats.sent },
-          { label: "Replied", value: stats.replied },
-          { label: "Link Clicked", value: stats.clicked },
-          { label: "MQL (HubSpot)", value: stats.mql },
-          { label: "BD Overlap", value: stats.bdOverlap, warn: stats.bdOverlap > 0 },
-        ].map(({ label, value, warn }) => (
-          <Card key={label} className="border-border bg-card p-4 text-card-foreground shadow-none">
-            <p className="text-xs text-muted-foreground">{label}</p>
-            {loading ? (
-              <Skeleton className="mt-1 h-8 w-12" />
-            ) : (
-              <p className={`mt-1 text-2xl font-semibold ${warn ? "text-orange-500 dark:text-orange-400" : "text-foreground"}`}>
-                {value}
+        {/* Icon + label row */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+          <span style={{
+            width:          "28px",
+            height:         "28px",
+            borderRadius:   "8px",
+            background:     `${C.accent}18`,
+            border:         `1px solid ${C.accent}30`,
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "center",
+            flexShrink:     0,
+            fontSize:       "13px",
+            color:          C.accent,
+          }}>
+            ◎
+          </span>
+          <span style={{
+            fontSize:      "9.5px",
+            fontWeight:    700,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color:         C.slate,
+          }}>
+            Norm DAU QTD
+          </span>
+          {ssKpis && (
+            <span style={{ fontSize: "10px", color: C.muted, marginLeft: "4px" }}>
+              — {ssKpis.currentQuarter}
+            </span>
+          )}
+        </div>
+
+        {ssKpisLoading ? (
+          <div style={{
+            height:          48,
+            width:           140,
+            borderRadius:    "10px",
+            background:      C.card,
+            backgroundImage: `linear-gradient(90deg, ${C.card} 0%, ${C.cardAlt} 50%, ${C.card} 100%)`,
+            backgroundSize:  "200% 100%",
+            animation:       "bm-shimmer 1.6s ease infinite",
+          }} />
+        ) : ssKpis ? (
+          <>
+            {/* Value */}
+            <p style={{
+              fontSize:      "38px",
+              fontWeight:    700,
+              lineHeight:    1,
+              color:         C.sageLight,
+              letterSpacing: "-0.025em",
+              fontFamily:    MONO,
+              marginBottom:  "8px",
+            }}>
+              {fmtDau(ssKpis.qtdNormDau)}
+            </p>
+
+            {/* QoQ + prev quarter */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "5px", marginTop: "2px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {ssKpis.prevQNormDau > 0 && (() => {
+                  const pct = ((ssKpis.qtdNormDau - ssKpis.prevQNormDau) / ssKpis.prevQNormDau) * 100
+                  const positive = pct >= 0
+                  return (
+                    <span style={{
+                      display:       "inline-flex",
+                      alignItems:    "center",
+                      gap:           "3px",
+                      background:    positive ? C.accentDim : C.redDim,
+                      color:         positive ? C.accent : C.red,
+                      padding:       "2px 8px",
+                      borderRadius:  "999px",
+                      fontSize:      "11px",
+                      fontWeight:    600,
+                      letterSpacing: "0.01em",
+                    }}>
+                      {positive ? "▲" : "▼"} {Math.abs(pct).toFixed(0)}% QoQ
+                    </span>
+                  )
+                })()}
+                <span style={{ fontSize: "11px", color: C.muted }}>
+                  vs {ssKpis.prevQuarter} {fmtDau(ssKpis.prevQNormDau)}
+                </span>
+              </div>
+              {/* HS view */}
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "10px", color: C.muted }}>HS view:</span>
+                <span style={{ fontSize: "11px", fontFamily: MONO, fontWeight: 600, color: C.slate }}>
+                  {fmtDau(ssKpis.hsQtdNormDau)}
+                </span>
+                <span style={{
+                  fontSize:   "10px",
+                  color:      ssKpis.qtdNormDau >= ssKpis.hsQtdNormDau ? C.accent : C.red,
+                  fontFamily: MONO,
+                }}>
+                  {ssKpis.qtdNormDau >= ssKpis.hsQtdNormDau ? "+" : ""}{fmtDau(ssKpis.qtdNormDau - ssKpis.hsQtdNormDau)} vs HS
+                </span>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div style={{ marginTop: "14px" }}>
+              <div style={{
+                height:       "2px",
+                background:   C.border,
+                borderRadius: "99px",
+                overflow:     "hidden",
+              }}>
+                <div style={{
+                  height:       "100%",
+                  width:        `${Math.min((ssKpis.qtdNormDau / 1_000_000) * 100, 100)}%`,
+                  background:   `linear-gradient(90deg, ${C.accent}, ${C.accentBright})`,
+                  borderRadius: "99px",
+                  transition:   "width 1.2s cubic-bezier(0.4,0,0.2,1)",
+                }} />
+              </div>
+              <p style={{ fontSize: "10px", color: C.muted, marginTop: "5px" }}>
+                {Math.round((ssKpis.qtdNormDau / 1_000_000) * 100)}% of 1M target
               </p>
-            )}
-          </Card>
-        ))}
+            </div>
+          </>
+        ) : (
+          <p style={{ fontSize: "12px", color: C.muted }}>Could not load KPI data</p>
+        )}
+
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap');
+          @keyframes bm-shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+          }
+        `}</style>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Filter by status:</span>
-        {["all", "emailsReplied", "emailsClicked", "emailsOpened", "emailsSent", "emailsBounced", "reviewed"].map((s) => (
-          <button
-            type="button"
-            key={s}
-            onClick={() => setStateFilter(s)}
-            className={shellFilterChip(stateFilter === s)}
-          >
-            {s === "all" ? "All" : STATE_LABEL[s]?.label ?? s}
-            {s !== "all" && !loading && (
-              <span className="ml-1 opacity-70">
-                ({s === "emailsClicked" ? rows.filter((r) => r.clicked).length : rows.filter((r) => r.leadState === s).length})
+      {/* MQL Norm DAU */}
+      <div style={{
+        background:   C.card,
+        border:       `1px solid ${C.border}`,
+        borderRadius: "16px",
+        padding:      "22px 26px",
+        position:     "relative",
+        overflow:     "hidden",
+        fontFamily:   "'Outfit', system-ui, sans-serif",
+      }}>
+        {/* Top shimmer line */}
+        <div style={{
+          position:   "absolute",
+          top: 0, left: "10%", right: "10%",
+          height:     "1px",
+          background: `linear-gradient(90deg, transparent, rgba(76,158,245,0.18), transparent)`,
+          pointerEvents: "none",
+        }} />
+        {/* Left accent stripe */}
+        <div style={{
+          position:     "absolute",
+          left:         0, top: "18%", bottom: "18%",
+          width:        "3px",
+          borderRadius: "0 3px 3px 0",
+          background:   "#4c9ef5",
+          opacity:      0.9,
+        }} />
+
+        {/* Icon + label row */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+          <span style={{
+            width:          "28px",
+            height:         "28px",
+            borderRadius:   "8px",
+            background:     "rgba(76,158,245,0.1)",
+            border:         "1px solid rgba(76,158,245,0.19)",
+            display:        "flex",
+            alignItems:     "center",
+            justifyContent: "center",
+            flexShrink:     0,
+            fontSize:       "13px",
+            color:          "#4c9ef5",
+          }}>
+            ⬡
+          </span>
+          <span style={{
+            fontSize:      "9.5px",
+            fontWeight:    700,
+            letterSpacing: "0.12em",
+            textTransform: "uppercase",
+            color:         C.slate,
+          }}>
+            MQL Norm DAU QTD
+          </span>
+          {ssKpis && (
+            <span style={{ fontSize: "10px", color: C.muted, marginLeft: "4px" }}>
+              — {ssKpis.currentQuarter}
+            </span>
+          )}
+        </div>
+
+        {mqlDauLoading ? (
+          <div style={{
+            height:          48,
+            width:           140,
+            borderRadius:    "10px",
+            background:      C.card,
+            backgroundImage: `linear-gradient(90deg, ${C.card} 0%, ${C.cardAlt} 50%, ${C.card} 100%)`,
+            backgroundSize:  "200% 100%",
+            animation:       "bm-shimmer 1.6s ease infinite",
+          }} />
+        ) : mqlDau ? (
+          <>
+            {/* Deal count — big KPI */}
+            <p style={{
+              fontSize:      "38px",
+              fontWeight:    700,
+              lineHeight:    1,
+              color:         C.sageLight,
+              letterSpacing: "-0.025em",
+              fontFamily:    MONO,
+              marginBottom:  "8px",
+            }}>
+              {mqlDau.dealCount}
+            </p>
+
+            {/* Norm DAU sub-value */}
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
+              <span style={{
+                display:       "inline-flex",
+                alignItems:    "center",
+                gap:           "3px",
+                background:    "rgba(76,158,245,0.15)",
+                color:         "#4c9ef5",
+                padding:       "2px 8px",
+                borderRadius:  "999px",
+                fontSize:      "11px",
+                fontWeight:    600,
+                letterSpacing: "0.01em",
+              }}>
+                {fmtDau(mqlDau.mqlNormDau)} Norm DAU
               </span>
-            )}
-          </button>
-        ))}
-      </div>
+              <span style={{ fontSize: "11px", color: C.muted }}>
+                entered MQL or sourced Q3 2026
+              </span>
+            </div>
 
-      {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/50">
-              <TableHead className="text-xs font-medium text-muted-foreground">Contact</TableHead>
-              <TableHead className="text-xs font-medium text-muted-foreground">Company / App</TableHead>
-              <TableHead className="text-xs font-medium text-muted-foreground">US DAU</TableHead>
-              <TableHead className="text-xs font-medium text-muted-foreground">Email Status</TableHead>
-              <TableHead className="text-xs font-medium text-muted-foreground">Link Clicked</TableHead>
-              <TableHead className="text-xs font-medium text-muted-foreground">HubSpot Stage</TableHead>
-              <TableHead className="text-xs font-medium text-muted-foreground">BD Overlap</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading &&
-              Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
-                    <TableCell key={j}>
-                      <Skeleton className="h-4 w-full" />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            {!loading && filtered.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7} className="py-12 text-center text-sm text-muted-foreground">
-                  No contacts found.
-                </TableCell>
-              </TableRow>
-            )}
-            {!loading &&
-              filtered.map((row) => (
-                <TableRow key={row.leadId} className="hover:bg-muted/50">
-                  <TableCell>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {row.firstName} {row.lastName}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{row.jobTitle}</p>
-                      <a
-                        href={`mailto:${row.email}`}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        {row.email}
-                      </a>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-foreground">{row.company || "—"}</TableCell>
-                  <TableCell className="text-sm tabular-nums text-muted-foreground">
-                    {formatDAU(row.usdau)}
-                  </TableCell>
-                  <TableCell>{stateBadge(row.leadState)}</TableCell>
-                  <TableCell>
-                    {row.clicked ? (
-                      <Badge variant="secondary" className="bg-amber-100 text-amber-700 hover:bg-amber-100">
-                        Clicked
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">No</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {row.hubspot?.hubspotUrl ? (
-                      <a href={row.hubspot.hubspotUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col gap-0.5 group">
-                        {dealStageBadge(row.hubspot.dealStage)}
-                        {row.hubspot.dealName && (
-                          <span className="text-xs text-muted-foreground group-hover:underline">{row.hubspot.dealName}</span>
-                        )}
-                      </a>
-                    ) : (
-                      dealStageBadge(row.hubspot?.dealStage ?? null)
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {row.bdOverlap ? (
-                      <Badge variant="outline" className="border-orange-300 text-orange-600">
-                        {row.campaigns.length} campaigns
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-          </TableBody>
-        </Table>
+            {/* Progress bar — 135 target */}
+            <div style={{ marginTop: "14px" }}>
+              <div style={{
+                height:       "2px",
+                background:   C.border,
+                borderRadius: "99px",
+                overflow:     "hidden",
+              }}>
+                <div style={{
+                  height:       "100%",
+                  width:        `${Math.min((mqlDau.dealCount / 135) * 100, 100)}%`,
+                  background:   "linear-gradient(90deg, #4c9ef5, #7bb8ff)",
+                  borderRadius: "99px",
+                  transition:   "width 1.2s cubic-bezier(0.4,0,0.2,1)",
+                }} />
+              </div>
+              <p style={{ fontSize: "10px", color: C.muted, marginTop: "5px" }}>
+                {Math.round((mqlDau.dealCount / 135) * 100)}% of 135 target
+              </p>
+            </div>
+          </>
+        ) : (
+          <p style={{ fontSize: "12px", color: C.muted }}>Could not load MQL DAU data</p>
+        )}
+      </div>
       </div>
     </div>
   )
