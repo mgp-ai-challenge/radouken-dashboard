@@ -66,6 +66,31 @@ export async function searchDeals(filters: Filter[], properties: string[]): Prom
   return results
 }
 
+/** Like searchDeals but accepts multiple filter groups (OR logic between groups, AND within each group) */
+export async function searchDealsOr(filterGroups: Filter[][], properties: string[]): Promise<HSDeal[]> {
+  const key = JSON.stringify({ filterGroups, properties })
+  const cached = _cache.get(key)
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.data
+
+  const results: HSDeal[] = []
+  let after: string | undefined
+
+  do {
+    const body: Record<string, unknown> = {
+      filterGroups: filterGroups.map((filters) => ({ filters })),
+      properties,
+      limit: 200,
+    }
+    if (after) body.after = after
+    const page = await fetchPage(body)
+    results.push(...page.results)
+    after = page.after
+  } while (after)
+
+  _cache.set(key, { ts: Date.now(), data: results })
+  return results
+}
+
 export function sumProp(deals: HSDeal[], prop: string): number {
   return deals.reduce((sum, d) => sum + (parseFloat(d.properties[prop] ?? "0") || 0), 0)
 }
