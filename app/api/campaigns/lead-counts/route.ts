@@ -15,9 +15,27 @@ export async function GET(req: Request) {
     }
 
     // Sequential to respect Lemlist 10 req/s limit
-    const ncTotal      = await fetchCampaignLeadCount(nc)
-    const cuTotal      = await fetchCampaignLeadCount(cu)
-    const inboundTotal = await fetchCampaignLeadCount(inbound)
+    let ncTotal: number | null = null
+    let cuTotal: number | null = null
+    let inboundTotal: number | null = null
+
+    try {
+      ncTotal = await fetchCampaignLeadCount(nc)
+    } catch (err) {
+      console.error("[campaigns/lead-counts] Failed to fetch nc campaign:", err)
+    }
+
+    try {
+      cuTotal = await fetchCampaignLeadCount(cu)
+    } catch (err) {
+      console.error("[campaigns/lead-counts] Failed to fetch cu campaign:", err)
+    }
+
+    try {
+      inboundTotal = await fetchCampaignLeadCount(inbound)
+    } catch (err) {
+      console.error("[campaigns/lead-counts] Failed to fetch inbound campaign:", err)
+    }
 
     return NextResponse.json({ nc: ncTotal, cu: cuTotal, inbound: inboundTotal })
   } catch (err) {

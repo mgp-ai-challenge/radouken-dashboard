@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const FELLOW_API_KEY = process.env.FELLOW_API_KEY ?? "339ebe810d775fa920d0b2fc60f408551f8972caf55faefff0c280b06873796c"
+// FELLOW_API_KEY must be set in environment — no hardcoded fallback
+const FELLOW_API_KEY = process.env.FELLOW_API_KEY
+if (!FELLOW_API_KEY) console.warn("[fellow/complete] FELLOW_API_KEY is not set — Fellow API calls will fail")
 const FELLOW_BASE = "https://appodeal.fellow.app"
 
 export async function POST(req: NextRequest) {

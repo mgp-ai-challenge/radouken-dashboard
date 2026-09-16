@@ -171,6 +171,26 @@ export async function enrichCompany(companyId: string, name: string): Promise<Ap
   return result
 }
 
+// ─── Concurrency helper ─────────────────────────────────────────────────────
+
+/** Run async tasks with a concurrency limit to avoid N+1-style serial fetches. */
+async function withConcurrencyLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length)
+  let idx = 0
+  async function next(): Promise<void> {
+    while (idx < items.length) {
+      const i = idx++
+      results[i] = await fn(items[i])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => next()))
+  return results
+}
+
 // ─── ICP Sourcing helpers ─────────────────────────────────────────────────────
 
 // Re-declared here to avoid a circular import (icp-sourcing.ts imports from this file).
@@ -221,6 +241,58 @@ export async function searchAppsByCategory(
     })
   }
   return results
+}
+
+/**
+ * Batch-fetch app revenue for multiple apps in a single API call instead of
+ * fetching one-by-one (N+1). The SensorTower sales_report_estimates endpoint
+ * accepts comma-separated app_ids.
+ */
+export async function batchGetAppRevenue(
+  appIds: string[],
+  store: "ios" | "android",
+): Promise<Map<string, { monthlyDownloads: number | null }>> {
+  const resultMap = new Map<string, { monthlyDownloads: number | null }>()
+  if (appIds.length === 0) return resultMap
+
+  const BATCH_SIZE = 50 // ST API limit per request
+  for (let i = 0; i < appIds.length; i += BATCH_SIZE) {
+    const chunk = appIds.slice(i, i + BATCH_SIZE)
+    try {
+      const today = new Date()
+      const todayStr = today.toISOString().slice(0, 10)
+      const thirtyDaysAgo = new Date(today)
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const startStr = thirtyDaysAgo.toISOString().slice(0, 10)
+
+      const idsParam = chunk.map(id => encodeURIComponent(id)).join(",")
+      const data = await stFetch(
+        `/v1/${store}/sales_report_estimates?app_ids=${idsParam}&start_date=${startStr}&end_date=${todayStr}&countries=US`
+      ) as Array<{ app_id?: string | number; cc: string; iu?: number; au?: number }>
+
+      if (Array.isArray(data)) {
+        // Group by app_id
+        const byApp = new Map<string, Array<{ iu?: number; au?: number }>>()
+        for (const row of data) {
+          const aid = String(row.app_id ?? "")
+          if (!aid || row.cc !== "US") continue
+          if (!byApp.has(aid)) byApp.set(aid, [])
+          byApp.get(aid)!.push(row)
+        }
+        for (const id of chunk) {
+          const rows = byApp.get(id) ?? []
+          const total = rows.reduce((sum, r) => sum + (r.iu ?? 0) + (r.au ?? 0), 0)
+          resultMap.set(id, { monthlyDownloads: rows.length > 0 ? total : null })
+        }
+      }
+    } catch {
+      // On failure, set null for this chunk
+      for (const id of chunk) {
+        resultMap.set(id, { monthlyDownloads: null })
+      }
+    }
+  }
+  return resultMap
 }
 
 export async function checkSDKDetection(

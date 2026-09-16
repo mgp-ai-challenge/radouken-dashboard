@@ -9,12 +9,15 @@ const HS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN!
 // APAC countries matching HubSpot's ip_country filter exactly (as shown in HubSpot UI).
 // HubSpot filter uses "vietnam" / "hongkong" (no spaces) which don't match older contacts
 // stored as "viet nam" / "hong kong" — matching HubSpot's 7,984 figure intentionally.
+// Last validated against HubSpot UI: 2026-09-16
 const APAC_COUNTRIES = new Set([
   "china", "japan", "south korea", "korea", "taiwan", "hongkong", "singapore",
   "malaysia", "thailand", "indonesia", "philippines", "vietnam", "australia",
   "new zealand", "india", "pakistan", "bangladesh", "sri lanka", "nepal",
   "myanmar", "cambodia", "laos", "brunei",
 ])
+
+const _loggedUnknownCountries = new Set<string>()
 
 async function getApacDau(
   deals: Array<{ id: string; properties: Record<string, string | null> }>
@@ -55,6 +58,14 @@ async function getApacDau(
     const data = await res.json()
     for (const c of data.results ?? []) {
       contactCountry.set(c.id, (c.properties?.ip_country ?? "").toLowerCase())
+    }
+  }
+
+  // Log warning for unknown country codes that might indicate the APAC set is outdated
+  for (const [, country] of contactCountry) {
+    if (country && !APAC_COUNTRIES.has(country) && !_loggedUnknownCountries.has(country)) {
+      _loggedUnknownCountries.add(country)
+      console.warn(`[kpis] Unknown country code encountered: "${country}" — verify APAC_COUNTRIES set is up to date`)
     }
   }
 

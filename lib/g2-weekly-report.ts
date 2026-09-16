@@ -94,6 +94,17 @@ async function fetchIntentWindow(afterMs: number, beforeMs: number): Promise<Int
     }
 
     for (const c of data.results ?? []) {
+      const g2Props = [
+        "g2_buyer_intent_activity_level",
+        "g2_buyer_intent_buying_stage",
+        "g2_product_name",
+        "g2_related_products",
+      ]
+      const missingProps = g2Props.filter((p) => !(p in c.properties) || c.properties[p] == null)
+      if (missingProps.length === g2Props.length) {
+        console.warn(`[g2-weekly-report] Company ${c.id} ("${c.properties.name ?? ""}") has no G2 properties — G2 integration may not be configured`)
+      }
+
       all.push({
         id: c.id,
         name: c.properties.name ?? "",

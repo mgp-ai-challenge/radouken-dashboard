@@ -106,8 +106,14 @@ function buildQuarters() {
 }
 
 export async function GET() {
-  if (cache && Date.now() - cache.ts < CACHE_TTL) {
+  const now = Date.now()
+  if (cache && now - cache.ts < CACHE_TTL) {
     return NextResponse.json(cache.data)
+  }
+
+  // Invalidate stale cache so a failed refetch doesn't serve outdated data
+  if (cache && now - cache.ts >= CACHE_TTL) {
+    cache = null
   }
 
   try {
