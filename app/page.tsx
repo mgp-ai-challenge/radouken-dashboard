@@ -1222,6 +1222,10 @@ export default function DashboardPage() {
       {/* Recommendations */}
       {(() => {
         const recs = getRecommendations(culture, okrs)
+          .filter((r) => {
+            const s = recStatuses[r.id]
+            return s !== "done" && s !== "approved" && s !== "declined"
+          })
         if (recs.length === 0) return null
         return (
           <div style={{
