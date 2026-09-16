@@ -229,6 +229,8 @@ export default function DashboardPage() {
   const [meetingsLoading, setMeetingsLoading] = useState(true)
   const [addingAgendaIds, setAddingAgendaIds] = useState<Set<string>>(new Set())
   const [agendaAdded, setAgendaAdded] = useState<Set<string>>(new Set())
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
 
   const fetchAll = useCallback(() => {
     setSsKpisLoading(true)
@@ -271,7 +273,7 @@ export default function DashboardPage() {
       .then((r) => r.json())
       .then((data) => { if (!data.error) setMeetings(data) })
       .catch(() => {})
-      .finally(() => setMeetingsLoading(false))
+      .finally(() => { setMeetingsLoading(false); setRefreshing(false); setLastRefreshed(new Date()) })
   }, [])
 
   useEffect(() => {
@@ -280,8 +282,61 @@ export default function DashboardPage() {
     return () => clearInterval(id)
   }, [fetchAll])
 
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true)
+    fetchAll()
+  }, [fetchAll])
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6" style={{ fontFamily: "'Outfit', system-ui, sans-serif" }}>
+      {/* Dashboard Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <h1 style={{
+            fontSize: "20px", fontWeight: 700, color: C.sageLight,
+            letterSpacing: "-0.015em", margin: 0,
+          }}>Dashboard</h1>
+          <p style={{ fontSize: "11.5px", color: C.muted, marginTop: "3px" }}>
+            KPIs · Culture Score · OKRs · Fellow
+          </p>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {lastRefreshed && (
+            <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: C.muted }}>
+              <span style={{
+                width: "5px", height: "5px", borderRadius: "50%",
+                background: C.accent, display: "inline-block",
+              }} />
+              Last sync {lastRefreshed.toLocaleTimeString()}
+            </span>
+          )}
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: "transparent", border: `1px solid ${C.border}`,
+              borderRadius: "8px", padding: "6px 14px",
+              fontSize: "11.5px", fontWeight: 500, color: C.slate,
+              cursor: refreshing ? "not-allowed" : "pointer",
+              opacity: refreshing ? 0.5 : 1,
+              fontFamily: "'Outfit', system-ui, sans-serif",
+              transition: "border-color 0.2s, color 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.borderAccent; e.currentTarget.style.color = C.sage }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.slate }}
+          >
+            <span style={{
+              display: "inline-block",
+              animation: refreshing ? "spin 1s linear infinite" : "none",
+            }}>↻</span>
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
       {/* Self-Serve KPIs */}
       <div style={{
