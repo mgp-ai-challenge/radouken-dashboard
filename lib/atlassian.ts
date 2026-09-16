@@ -63,8 +63,8 @@ export async function fetchMyJiraTasks(): Promise<JiraTask[]> {
   )
 
   const [data, doneData] = await Promise.all([
-    atlassianFetch(`/rest/api/3/search?jql=${jql}&fields=summary,status,issuetype,updated&maxResults=50`),
-    atlassianFetch(`/rest/api/3/search?jql=${doneJql}&fields=summary,status,issuetype,updated&maxResults=20`),
+    atlassianFetch(`/rest/api/3/search/jql?jql=${jql}&fields=summary,status,issuetype,updated&maxResults=50`),
+    atlassianFetch(`/rest/api/3/search/jql?jql=${doneJql}&fields=summary,status,issuetype,updated&maxResults=20`),
   ]) as [any, any]
 
   return [...data.issues, ...doneData.issues].map((issue: any) => ({
