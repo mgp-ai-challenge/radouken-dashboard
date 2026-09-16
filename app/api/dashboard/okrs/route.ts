@@ -38,6 +38,7 @@ const STATUS_LABELS: Record<number, string> = {
   5: "Not Started",
 }
 
+// Last dashboard sync: 2026-09-16
 export async function GET() {
   // Since GetOKRs API requires MCP auth through Claude, we return the latest
   // snapshot data from the last MCP fetch. In production this would be backed
