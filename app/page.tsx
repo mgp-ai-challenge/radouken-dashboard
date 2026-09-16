@@ -186,6 +186,16 @@ type FellowData = {
   stats: { total: number; overdue: number; duplicates: number; suggestComplete: number; recentlyDone: number }
 }
 
+type BlogAttribution = {
+  totalDeals: number
+  blogFirstTouch: number
+  blogLastTouch: number
+  blogAnyTouch: number
+  blogPct: number
+  monthlyData: Array<{ month: string; count: number }>
+  blogDeals: Array<{ id: string; name: string; createDate: string; touchType: string }>
+}
+
 type MeetingNoAgenda = { id: string; title: string; hasAgenda: boolean; startTime: string | null }
 type MeetingsData = { total: number; withoutAgenda: MeetingNoAgenda[]; withAgenda: number; withoutAgendaCount: number }
 
@@ -229,6 +239,8 @@ export default function DashboardPage() {
   const [meetingsLoading, setMeetingsLoading] = useState(true)
   const [addingAgendaIds, setAddingAgendaIds] = useState<Set<string>>(new Set())
   const [agendaAdded, setAgendaAdded] = useState<Set<string>>(new Set())
+  const [blogAttr, setBlogAttr] = useState<BlogAttribution | null>(null)
+  const [blogAttrLoading, setBlogAttrLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -277,9 +289,16 @@ export default function DashboardPage() {
     setMeetingsLoading(true)
     fetch("/api/dashboard/fellow/meetings", { signal })
       .then((r) => r.json())
-      .then((data) => { if (!data.error) setMeetings(data) })
+      .then((data) => { if (!signal.aborted && !data.error) setMeetings(data) })
       .catch(() => {})
-      .finally(() => { if (!signal.aborted) { setMeetingsLoading(false); setRefreshing(false); setLastRefreshed(new Date()) } })
+      .finally(() => { if (!signal.aborted) setMeetingsLoading(false) })
+
+    setBlogAttrLoading(true)
+    fetch("/api/dashboard/blog-attribution", { signal })
+      .then((r) => r.json())
+      .then((data) => { if (!signal.aborted && !data.error) setBlogAttr(data) })
+      .catch(() => {})
+      .finally(() => { if (!signal.aborted) { setBlogAttrLoading(false); setRefreshing(false); setLastRefreshed(new Date()) } })
   }, [])
 
   useEffect(() => {
@@ -639,6 +658,137 @@ export default function DashboardPage() {
           <p style={{ fontSize: "12px", color: C.muted }}>Could not load MQL DAU data</p>
         )}
       </div>
+      </div>
+
+      {/* Blog Content Attribution */}
+      <div style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: "16px",
+        padding: "22px 26px", position: "relative", overflow: "hidden",
+        fontFamily: "'Outfit', system-ui, sans-serif",
+      }}>
+        <div style={{
+          position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+          background: `linear-gradient(90deg, transparent, rgba(5,199,155,0.18), transparent)`,
+          pointerEvents: "none",
+        }} />
+        <div style={{
+          position: "absolute", left: 0, top: "12%", bottom: "12%",
+          width: "3px", borderRadius: "0 3px 3px 0", background: C.accent, opacity: 0.9,
+        }} />
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px" }}>
+          <span style={{
+            width: "28px", height: "28px", borderRadius: "8px",
+            background: C.accentDim, border: `1px solid ${C.accent}30`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, fontSize: "13px", color: C.accent,
+          }}>✎</span>
+          <span style={{
+            fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em",
+            textTransform: "uppercase", color: C.slate,
+          }}>Blog Content Attribution — {new Date().getFullYear()} YTD</span>
+          <span style={{ fontSize: "10px", color: C.muted, marginLeft: "4px" }}>
+            First-touch · HubSpot
+          </span>
+        </div>
+
+        {blogAttrLoading ? (
+          <div style={{
+            height: 140, borderRadius: "10px", background: C.card,
+            backgroundImage: `linear-gradient(90deg, ${C.card} 0%, ${C.cardAlt} 50%, ${C.card} 100%)`,
+            backgroundSize: "200% 100%", animation: "bm-shimmer 1.6s ease infinite",
+          }} />
+        ) : blogAttr ? (
+          <>
+            {/* KPI row */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "18px" }}>
+              {[
+                { label: "Total Deals YTD", value: blogAttr.totalDeals, color: C.sageLight },
+                { label: "Blog First-Touch", value: blogAttr.blogFirstTouch, color: C.accent },
+                { label: "Blog Last-Touch", value: blogAttr.blogLastTouch, color: "#4c9ef5" },
+                { label: "Blog Attribution %", value: `${blogAttr.blogPct}%`, color: C.accent },
+              ].map(({ label, value, color }) => (
+                <div key={label} style={{
+                  background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: "10px",
+                  padding: "12px 14px", textAlign: "center",
+                }}>
+                  <p style={{ fontFamily: MONO, fontSize: "22px", fontWeight: 700, color }}>{value}</p>
+                  <p style={{ fontSize: "9px", color: C.muted, marginTop: "2px" }}>{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Monthly trend */}
+            {blogAttr.monthlyData.length > 0 && (
+              <div style={{ marginBottom: "16px" }}>
+                <p style={{ fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "10px" }}>
+                  Monthly Blog First-Touch Deals
+                </p>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: "4px", height: "60px" }}>
+                  {(() => {
+                    const max = Math.max(...blogAttr.monthlyData.map((d) => d.count), 1)
+                    return blogAttr.monthlyData.map((d) => (
+                      <div key={d.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "3px" }}>
+                        <span style={{ fontSize: "9px", fontFamily: MONO, fontWeight: 600, color: C.accent }}>
+                          {d.count}
+                        </span>
+                        <div style={{
+                          width: "100%", maxWidth: "32px",
+                          height: `${Math.max((d.count / max) * 40, 2)}px`,
+                          background: `linear-gradient(180deg, ${C.accent}, ${C.accent}60)`,
+                          borderRadius: "3px 3px 0 0",
+                        }} />
+                        <span style={{ fontSize: "8px", color: C.muted }}>
+                          {d.month.slice(5)}
+                        </span>
+                      </div>
+                    ))
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Recent blog-attributed deals */}
+            {blogAttr.blogDeals.length > 0 && (
+              <div>
+                <p style={{ fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "8px" }}>
+                  Recent Blog-Attributed Deals
+                </p>
+                <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+                  {blogAttr.blogDeals.map((deal, i) => (
+                    <div key={deal.id} style={{
+                      display: "flex", alignItems: "center", gap: "10px",
+                      padding: "6px 8px", borderBottom: i < blogAttr.blogDeals.length - 1 ? `1px solid ${C.border}` : "none",
+                      background: i % 2 === 0 ? "transparent" : C.cardAlt, borderRadius: "4px",
+                    }}>
+                      <span style={{ flex: 1, fontSize: "12px", color: C.sage, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {deal.name}
+                      </span>
+                      <span style={{ fontFamily: MONO, fontSize: "10px", color: C.muted, flexShrink: 0 }}>
+                        {deal.createDate}
+                      </span>
+                      <span style={{
+                        fontSize: "8px", fontWeight: 700, padding: "1px 5px", borderRadius: "999px", flexShrink: 0,
+                        background: deal.touchType.includes("first") ? C.accentDim : "rgba(76,158,245,0.15)",
+                        color: deal.touchType.includes("first") ? C.accent : "#4c9ef5",
+                      }}>
+                        {deal.touchType === "first+last" ? "FIRST+LAST" : deal.touchType === "first" ? "FIRST" : "LAST"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Caveat */}
+            <p style={{ fontSize: "10px", color: C.muted, marginTop: "12px", lineHeight: 1.4, fontStyle: "italic" }}>
+              First-touch: contact&apos;s first page seen (hs_analytics_first_url) contains &quot;blog&quot;.
+              Last-touch: contact&apos;s last page seen. Multi-touch attribution requires HubSpot Journey Builder.
+            </p>
+          </>
+        ) : (
+          <p style={{ fontSize: "12px", color: C.muted }}>Could not load blog attribution data</p>
+        )}
       </div>
 
       {/* Culture Score + Activity */}
