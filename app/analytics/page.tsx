@@ -2,7 +2,7 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { Play, Loader2, ChevronRight, ChevronDown } from "lucide-react"
+import { Play, Loader2, ChevronRight, ChevronDown, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -212,12 +212,18 @@ export default function BugTrackingPage() {
             )}
           </p>
         </div>
-        <Button onClick={runScan} disabled={scanning} size="sm" className="gap-2">
-          {scanning
-            ? <Loader2 className="size-3.5 animate-spin" />
-            : <Play className="size-3.5" />}
-          {scanning ? "Scanning…" : "Run Scan"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={fetchIssues} variant="outline" size="sm" className="gap-2">
+            <RefreshCw className="size-3.5" />
+            Refresh
+          </Button>
+          <Button onClick={runScan} disabled={scanning} size="sm" className="gap-2">
+            {scanning
+              ? <Loader2 className="size-3.5 animate-spin" />
+              : <Play className="size-3.5" />}
+            {scanning ? "Scanning…" : "Run Scan"}
+          </Button>
+        </div>
       </div>
 
       {/* Summary strip */}
