@@ -205,6 +205,7 @@ export default function DashboardPage() {
   const [culture, setCulture] = useState<CultureScore | null>(null)
   const [cultureLoading, setCultureLoading] = useState(true)
   const [recStatuses, setRecStatuses] = useState<Record<string, Recommendation["status"]>>({})
+  const [recMessages, setRecMessages] = useState<Record<string, string>>({})
   const [fellow, setFellow] = useState<FellowData | null>(null)
   const [fellowLoading, setFellowLoading] = useState(true)
   const [fellowFilter, setFellowFilter] = useState<FellowFilter>("all")
@@ -1168,12 +1169,18 @@ export default function DashboardPage() {
                       {status === "pending" ? (
                         <>
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               setRecStatuses((prev) => ({ ...prev, [rec.id]: "approved" }))
                               if (rec.actionEndpoint) {
-                                fetch(rec.actionEndpoint, { method: "POST" })
-                                  .then(() => setRecStatuses((prev) => ({ ...prev, [rec.id]: "done" })))
-                                  .catch(() => setRecStatuses((prev) => ({ ...prev, [rec.id]: "approved" })))
+                                try {
+                                  const res = await fetch(rec.actionEndpoint, { method: "POST" })
+                                  const data = await res.json()
+                                  setRecMessages((prev) => ({ ...prev, [rec.id]: data.message ?? "Done" }))
+                                  setRecStatuses((prev) => ({ ...prev, [rec.id]: "done" }))
+                                } catch {
+                                  setRecMessages((prev) => ({ ...prev, [rec.id]: "Action failed — retry later" }))
+                                  setRecStatuses((prev) => ({ ...prev, [rec.id]: "approved" }))
+                                }
                               }
                             }}
                             style={{
@@ -1224,15 +1231,22 @@ export default function DashboardPage() {
                           )}
                         </>
                       ) : (
-                        <span style={{
-                          display: "inline-flex", alignItems: "center", gap: "4px",
-                          fontSize: "11px", fontWeight: 600,
-                          color: status === "declined" ? C.red : status === "done" ? C.accent : "#f5a623",
-                        }}>
-                          {status === "declined" && "✕ Declined"}
-                          {status === "approved" && "⏳ Running..."}
-                          {status === "done" && "✓ Done"}
-                        </span>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: "4px",
+                            fontSize: "11px", fontWeight: 600,
+                            color: status === "declined" ? C.red : status === "done" ? C.accent : "#f5a623",
+                          }}>
+                            {status === "declined" && "✕ Declined"}
+                            {status === "approved" && "⏳ Running..."}
+                            {status === "done" && "✓ Done"}
+                          </span>
+                          {recMessages[rec.id] && (
+                            <span style={{ fontSize: "10px", color: C.muted, lineHeight: 1.3 }}>
+                              {recMessages[rec.id]}
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
