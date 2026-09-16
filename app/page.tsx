@@ -187,6 +187,9 @@ type FellowData = {
   stats: { total: number; overdue: number; duplicates: number; suggestComplete: number; recentlyDone: number }
 }
 
+type MeetingNoAgenda = { id: string; title: string; hasAgenda: boolean; startTime: string | null }
+type MeetingsData = { total: number; withoutAgenda: MeetingNoAgenda[]; withAgenda: number; withoutAgendaCount: number }
+
 type FellowFilter = "all" | "overdue" | "duplicates" | "suggest" | "ai"
 
 const PRIORITY_COLOR: Record<string, string> = {
@@ -210,6 +213,10 @@ export default function DashboardPage() {
   const [fellowLoading, setFellowLoading] = useState(true)
   const [fellowFilter, setFellowFilter] = useState<FellowFilter>("all")
   const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
+  const [meetings, setMeetings] = useState<MeetingsData | null>(null)
+  const [meetingsLoading, setMeetingsLoading] = useState(true)
+  const [addingAgendaIds, setAddingAgendaIds] = useState<Set<string>>(new Set())
+  const [agendaAdded, setAgendaAdded] = useState<Set<string>>(new Set())
 
   const fetchAll = useCallback(() => {
     setSsKpisLoading(true)
@@ -246,6 +253,13 @@ export default function DashboardPage() {
       .then((data) => { if (!data.error) setFellow(data) })
       .catch(() => {})
       .finally(() => setFellowLoading(false))
+
+    setMeetingsLoading(true)
+    fetch("/api/dashboard/fellow/meetings")
+      .then((r) => r.json())
+      .then((data) => { if (!data.error) setMeetings(data) })
+      .catch(() => {})
+      .finally(() => setMeetingsLoading(false))
   }, [])
 
   useEffect(() => {
@@ -945,6 +959,111 @@ export default function DashboardPage() {
           <p style={{ fontSize: "12px", color: C.muted }}>Could not load Fellow data</p>
         )}
       </div>
+
+      {/* Meetings Without Agenda */}
+      {meetings && meetings.withoutAgendaCount > 0 && (
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: "16px",
+          padding: "22px 26px", position: "relative", overflow: "hidden",
+          fontFamily: "'Outfit', system-ui, sans-serif",
+        }}>
+          <div style={{
+            position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+            background: `linear-gradient(90deg, transparent, rgba(245,166,35,0.18), transparent)`,
+            pointerEvents: "none",
+          }} />
+          <div style={{
+            position: "absolute", left: 0, top: "10%", bottom: "10%",
+            width: "3px", borderRadius: "0 3px 3px 0", background: "#f5a623", opacity: 0.9,
+          }} />
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+            <span style={{
+              width: "28px", height: "28px", borderRadius: "8px",
+              background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.19)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, fontSize: "13px", color: "#f5a623",
+            }}>✎</span>
+            <span style={{
+              fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em",
+              textTransform: "uppercase", color: C.slate,
+            }}>Meetings Without Agenda</span>
+            <span style={{
+              marginLeft: "auto", fontSize: "10px", color: "#f5a623", fontFamily: MONO, fontWeight: 600,
+            }}>
+              {meetings.withoutAgendaCount} of {meetings.total} meetings
+            </span>
+          </div>
+
+          <p style={{ fontSize: "11px", color: C.muted, marginBottom: "12px", lineHeight: 1.4 }}>
+            These meetings have no agenda set. Click "Generate Agenda" to create one based on the meeting title — it will be added directly in Fellow.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {meetings.withoutAgenda.map((mtg) => {
+              const isAdding = addingAgendaIds.has(mtg.id)
+              const isDone = agendaAdded.has(mtg.id)
+              return (
+                <div key={mtg.id} style={{
+                  display: "flex", alignItems: "center", gap: "10px",
+                  padding: "8px 12px", background: isDone ? C.card : C.cardAlt,
+                  border: `1px solid ${isDone ? C.accent + "30" : C.border}`,
+                  borderRadius: "8px", opacity: isDone ? 0.6 : 1,
+                  transition: "opacity 0.3s",
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      fontSize: "12px", color: C.sage, overflow: "hidden",
+                      textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    }}>{mtg.title}</p>
+                    {mtg.startTime && (
+                      <p style={{ fontSize: "10px", color: C.muted, fontFamily: MONO }}>
+                        {new Date(mtg.startTime).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                        {" "}
+                        {new Date(mtg.startTime).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    )}
+                  </div>
+
+                  {isDone ? (
+                    <span style={{ fontSize: "10px", color: C.accent, fontWeight: 600 }}>✓ Agenda added</span>
+                  ) : (
+                    <button
+                      disabled={isAdding}
+                      onClick={async () => {
+                        setAddingAgendaIds((prev) => new Set([...prev, mtg.id]))
+                        try {
+                          const res = await fetch("/api/dashboard/fellow/add-agenda", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ noteId: mtg.id, title: mtg.title }),
+                          })
+                          if (res.ok) {
+                            setAgendaAdded((prev) => new Set([...prev, mtg.id]))
+                          }
+                        } finally {
+                          setAddingAgendaIds((prev) => { const n = new Set(prev); n.delete(mtg.id); return n })
+                        }
+                      }}
+                      style={{
+                        padding: "4px 12px", borderRadius: "6px", fontSize: "10px", fontWeight: 600,
+                        border: `1px solid rgba(245,166,35,0.3)`, background: "rgba(245,166,35,0.12)",
+                        color: "#f5a623", cursor: isAdding ? "not-allowed" : "pointer",
+                        fontFamily: "'Outfit', system-ui, sans-serif", whiteSpace: "nowrap",
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={(e) => { if (!isAdding) e.currentTarget.style.background = "rgba(245,166,35,0.25)" }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(245,166,35,0.12)" }}
+                    >
+                      {isAdding ? "Adding..." : "✎ Generate Agenda"}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* OKR Panel */}
       <div style={{
