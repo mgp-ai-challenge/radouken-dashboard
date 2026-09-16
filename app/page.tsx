@@ -259,8 +259,6 @@ export default function DashboardPage() {
     if (!culture)   setCultureLoading(true)
     if (!fellow)    setFellowLoading(true)
     if (!meetings)  setMeetingsLoading(true)
-    if (!blogAttr)  setBlogAttrLoading(true)
-
     fetch("/api/self-serve/kpis", { signal })
       .then((r) => r.json())
       .then((data) => { if (!signal.aborted && !data.error) setSsKpis(data) })
@@ -299,6 +297,7 @@ export default function DashboardPage() {
 
     // Blog attribution is expensive — only fetch on first load or manual refresh
     if (!blogLoadedRef.current) {
+      setBlogAttrLoading(true)
       fetch("/api/dashboard/blog-attribution", { signal })
         .then((r) => r.json())
         .then((data) => { if (!signal.aborted && !data.error) { setBlogAttr(data); blogLoadedRef.current = true } })
