@@ -73,6 +73,109 @@ const STATUS_COLOR: Record<number, string> = {
   5: "#7c8c94",
 }
 
+type Recommendation = {
+  id: string
+  priority: "high" | "medium" | "low"
+  title: string
+  description: string
+  impact: string
+  actionLabel: string
+  actionEndpoint: string | null
+  status: "pending" | "approved" | "declined" | "running" | "done"
+}
+
+function getRecommendations(culture: CultureScore | null, okrs: OkrData | null): Recommendation[] {
+  if (!culture) return []
+  const recs: Recommendation[] = []
+
+  // OKR health is the #1 issue (-54 penalty)
+  if (culture.okrHealth.warning > 0 || culture.okrHealth.critical > 0) {
+    recs.push({
+      id: "okr-market-data",
+      priority: "high",
+      title: "Fix OKR warning: add market data to MQL KR",
+      description: "Your MQL Key Result is flagged for missing market/TAM benchmarks. I can update the KR description in GetOKRs to reference AdTech MQL benchmarks (Forrester B2B benchmark: 5-8% MQL-to-SQL rate) and cite your Q2 baseline as the internal benchmark.",
+      impact: "Removes the OKR warning flag, improving OKR health rate from 75% to 100% and stopping the repeat penalty cycle (-54 pts).",
+      actionLabel: "Update KR description in GetOKRs",
+      actionEndpoint: "/api/dashboard/actions/fix-okr-warning",
+      status: "pending",
+    })
+  }
+
+  // OKR check-in freshness
+  if (okrs) {
+    const behindKRs = okrs.keyResults.filter((kr) => kr.status === 3)
+    if (behindKRs.length > 0) {
+      recs.push({
+        id: "okr-checkin",
+        priority: "high",
+        title: "Update OKR check-in for MQL KR",
+        description: `Your MQL KR shows 94/135 but is marked "Behind". I can push a check-in to GetOKRs with the latest MQL count from HubSpot (via /api/dashboard/mql-dau) to keep the progress current.`,
+        impact: "Keeps OKR data fresh, prevents stale check-in penalties.",
+        actionLabel: "Push check-in to GetOKRs",
+        actionEndpoint: "/api/dashboard/actions/push-checkin",
+        status: "pending",
+      })
+    }
+  }
+
+  // GitHub activity
+  if (culture.github.prsMerged < 2) {
+    recs.push({
+      id: "github-pr",
+      priority: "medium",
+      title: "Create and merge a PR under your handle",
+      description: "You have 1 merged PR in the last 14 days. Merging Dependabot PRs doesn't count — you need to author the PR. I can create a feature branch with today's dashboard changes, open a PR, and merge it.",
+      impact: "Increases merged PR count, prevents github_inactive repeat flag.",
+      actionLabel: "Create & merge a PR",
+      actionEndpoint: "/api/dashboard/actions/create-pr",
+      status: "pending",
+    })
+  }
+
+  // Fellow action items completion rate
+  if (culture.fellow.actionItemsAssigned > 0) {
+    const completionRate = Math.round((culture.fellow.actionItemsCompleted / culture.fellow.actionItemsAssigned) * 100)
+    if (completionRate < 50) {
+      recs.push({
+        id: "fellow-actions",
+        priority: "medium",
+        title: `Action item completion rate is ${completionRate}%`,
+        description: `You have ${culture.fellow.actionItemsAssigned} action items assigned and only ${culture.fellow.actionItemsCompleted} completed (${completionRate}%). Review overdue items in Fellow and mark completed ones. This is a manual action — I can't access Fellow directly.`,
+        impact: "Improves meeting discipline signals and shows follow-through.",
+        actionLabel: "Open Fellow",
+        actionEndpoint: null,
+        status: "pending",
+      })
+    }
+  }
+
+  // Meeting agenda coverage
+  if (culture.fellow.meetingsInvited > 0 && culture.fellow.meetingsWithAgenda < culture.fellow.meetingsInvited) {
+    const missing = culture.fellow.meetingsInvited - culture.fellow.meetingsWithAgenda
+    if (missing > 3) {
+      recs.push({
+        id: "meeting-agenda",
+        priority: "low",
+        title: `${missing} meetings without agenda`,
+        description: "Ensure all meetings you organize have an agenda set in Fellow before the meeting starts. This improves your meeting discipline score.",
+        impact: "Meeting discipline is at 87% — closing agenda gaps could push it higher.",
+        actionLabel: "Open Fellow",
+        actionEndpoint: null,
+        status: "pending",
+      })
+    }
+  }
+
+  return recs
+}
+
+const PRIORITY_COLOR: Record<string, string> = {
+  high: "#ef4444",
+  medium: "#f5a623",
+  low: "#4c9ef5",
+}
+
 export default function DashboardPage() {
   const [ssKpis, setSsKpis] = useState<SelfServeKpis | null>(null)
   const [ssKpisLoading, setSsKpisLoading] = useState(true)
@@ -82,6 +185,7 @@ export default function DashboardPage() {
   const [okrsLoading, setOkrsLoading] = useState(true)
   const [culture, setCulture] = useState<CultureScore | null>(null)
   const [cultureLoading, setCultureLoading] = useState(true)
+  const [recStatuses, setRecStatuses] = useState<Record<string, Recommendation["status"]>>({})
 
   const fetchAll = useCallback(() => {
     setSsKpisLoading(true)
@@ -736,6 +840,163 @@ export default function DashboardPage() {
           <p style={{ fontSize: "12px", color: C.muted }}>Could not load OKR data</p>
         )}
       </div>
+
+      {/* Recommendations */}
+      {(() => {
+        const recs = getRecommendations(culture, okrs)
+        if (recs.length === 0) return null
+        return (
+          <div style={{
+            background: C.card, border: `1px solid ${C.border}`, borderRadius: "16px",
+            padding: "22px 26px", position: "relative", overflow: "hidden",
+            fontFamily: "'Outfit', system-ui, sans-serif",
+          }}>
+            <div style={{
+              position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+              background: `linear-gradient(90deg, transparent, rgba(5,199,155,0.18), transparent)`,
+              pointerEvents: "none",
+            }} />
+            <div style={{
+              position: "absolute", left: 0, top: "8%", bottom: "8%",
+              width: "3px", borderRadius: "0 3px 3px 0", background: C.accent, opacity: 0.9,
+            }} />
+
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "18px" }}>
+              <span style={{
+                width: "28px", height: "28px", borderRadius: "8px",
+                background: C.accentDim, border: `1px solid ${C.accent}30`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, fontSize: "13px", color: C.accent,
+              }}>⚡</span>
+              <span style={{
+                fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em",
+                textTransform: "uppercase", color: C.slate,
+              }}>
+                Recommendations to Improve Score
+              </span>
+              <span style={{
+                marginLeft: "auto", fontSize: "10px", color: C.muted,
+              }}>
+                {recs.filter((r) => (recStatuses[r.id] ?? r.status) === "pending").length} pending
+              </span>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {recs.map((rec) => {
+                const status = recStatuses[rec.id] ?? rec.status
+                const priColor = PRIORITY_COLOR[rec.priority]
+                const isDone = status === "approved" || status === "declined" || status === "done"
+
+                return (
+                  <div key={rec.id} style={{
+                    background: isDone ? C.card : C.cardAlt,
+                    border: `1px solid ${isDone ? C.border : priColor + "30"}`,
+                    borderRadius: "10px", padding: "14px 16px",
+                    opacity: status === "declined" ? 0.5 : 1,
+                    transition: "opacity 0.3s, border-color 0.3s",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "8px" }}>
+                      {/* Priority chip */}
+                      <span style={{
+                        display: "inline-flex", alignItems: "center",
+                        background: `${priColor}18`, color: priColor,
+                        padding: "1px 6px", borderRadius: "999px", fontSize: "9px", fontWeight: 700,
+                        textTransform: "uppercase", letterSpacing: "0.05em", flexShrink: 0, marginTop: "2px",
+                      }}>
+                        {rec.priority}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: "13px", fontWeight: 600, color: C.sageLight, marginBottom: "4px", lineHeight: 1.3 }}>
+                          {rec.title}
+                        </p>
+                        <p style={{ fontSize: "11.5px", color: C.sage, lineHeight: 1.5, marginBottom: "6px" }}>
+                          {rec.description}
+                        </p>
+                        <p style={{ fontSize: "10px", color: C.accent, lineHeight: 1.4 }}>
+                          Impact: {rec.impact}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "10px", paddingTop: "10px", borderTop: `1px solid ${C.border}` }}>
+                      {status === "pending" ? (
+                        <>
+                          <button
+                            onClick={() => {
+                              setRecStatuses((prev) => ({ ...prev, [rec.id]: "approved" }))
+                              if (rec.actionEndpoint) {
+                                fetch(rec.actionEndpoint, { method: "POST" })
+                                  .then(() => setRecStatuses((prev) => ({ ...prev, [rec.id]: "done" })))
+                                  .catch(() => setRecStatuses((prev) => ({ ...prev, [rec.id]: "approved" })))
+                              }
+                            }}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "5px",
+                              padding: "6px 16px", borderRadius: "8px", border: `1px solid ${C.accent}40`,
+                              background: C.accentDim, color: C.accent,
+                              fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                              fontFamily: "'Outfit', system-ui, sans-serif",
+                              transition: "background 0.15s, border-color 0.15s",
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = `${C.accent}30`; e.currentTarget.style.borderColor = C.accent }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = C.accentDim; e.currentTarget.style.borderColor = `${C.accent}40` }}
+                          >
+                            ✓ Approve
+                          </button>
+                          <button
+                            onClick={() => setRecStatuses((prev) => ({ ...prev, [rec.id]: "declined" }))}
+                            style={{
+                              display: "flex", alignItems: "center", gap: "5px",
+                              padding: "6px 16px", borderRadius: "8px", border: `1px solid ${C.border}`,
+                              background: "transparent", color: C.muted,
+                              fontSize: "11px", fontWeight: 600, cursor: "pointer",
+                              fontFamily: "'Outfit', system-ui, sans-serif",
+                              transition: "background 0.15s, color 0.15s",
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = C.redDim; e.currentTarget.style.color = C.red }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.muted }}
+                          >
+                            ✕ Decline
+                          </button>
+                          {!rec.actionEndpoint && (
+                            <a
+                              href="https://fellow.app"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                marginLeft: "auto", fontSize: "10px", color: C.muted,
+                                textDecoration: "none",
+                              }}
+                            >
+                              Manual action ↗
+                            </a>
+                          )}
+                          {rec.actionEndpoint && (
+                            <span style={{ marginLeft: "auto", fontSize: "10px", color: C.muted }}>
+                              Automated action
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span style={{
+                          display: "inline-flex", alignItems: "center", gap: "4px",
+                          fontSize: "11px", fontWeight: 600,
+                          color: status === "declined" ? C.red : status === "done" ? C.accent : "#f5a623",
+                        }}>
+                          {status === "declined" && "✕ Declined"}
+                          {status === "approved" && "⏳ Running..."}
+                          {status === "done" && "✓ Done"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
