@@ -251,49 +251,51 @@ export default function DashboardPage() {
     abortRef.current = controller
     const { signal } = controller
 
-    setSsKpisLoading(true)
+    // Only show skeleton loaders on initial load — don't flash them on background refreshes
+    if (!ssKpis)    setSsKpisLoading(true)
+    if (!mqlDau)    setMqlDauLoading(true)
+    if (!okrs)      setOkrsLoading(true)
+    if (!culture)   setCultureLoading(true)
+    if (!fellow)    setFellowLoading(true)
+    if (!meetings)  setMeetingsLoading(true)
+    if (!blogAttr)  setBlogAttrLoading(true)
+
     fetch("/api/self-serve/kpis", { signal })
       .then((r) => r.json())
-      .then((data) => { if (!data.error) setSsKpis(data) })
+      .then((data) => { if (!signal.aborted && !data.error) setSsKpis(data) })
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setSsKpisLoading(false) })
 
-    setMqlDauLoading(true)
     fetch("/api/dashboard/mql-dau", { signal })
       .then((r) => r.json())
-      .then((data) => { if (!data.error) setMqlDau(data) })
+      .then((data) => { if (!signal.aborted && !data.error) setMqlDau(data) })
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setMqlDauLoading(false) })
 
-    setOkrsLoading(true)
     fetch("/api/dashboard/okrs", { signal })
       .then((r) => r.json())
-      .then((data) => { if (!data.error) setOkrs(data) })
+      .then((data) => { if (!signal.aborted && !data.error) setOkrs(data) })
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setOkrsLoading(false) })
 
-    setCultureLoading(true)
     fetch("/api/dashboard/culture-score", { signal })
       .then((r) => r.json())
-      .then((data) => { if (!data.error) setCulture(data) })
+      .then((data) => { if (!signal.aborted && !data.error) setCulture(data) })
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setCultureLoading(false) })
 
-    setFellowLoading(true)
     fetch("/api/dashboard/fellow", { signal })
       .then((r) => r.json())
-      .then((data) => { if (!data.error) setFellow(data) })
+      .then((data) => { if (!signal.aborted && !data.error) setFellow(data) })
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setFellowLoading(false) })
 
-    setMeetingsLoading(true)
     fetch("/api/dashboard/fellow/meetings", { signal })
       .then((r) => r.json())
       .then((data) => { if (!signal.aborted && !data.error) setMeetings(data) })
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setMeetingsLoading(false) })
 
-    setBlogAttrLoading(true)
     fetch("/api/dashboard/blog-attribution", { signal })
       .then((r) => r.json())
       .then((data) => { if (!signal.aborted && !data.error) setBlogAttr(data) })
