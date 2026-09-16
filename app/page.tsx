@@ -296,11 +296,17 @@ export default function DashboardPage() {
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setMeetingsLoading(false) })
 
-    fetch("/api/dashboard/blog-attribution", { signal })
-      .then((r) => r.json())
-      .then((data) => { if (!signal.aborted && !data.error) setBlogAttr(data) })
-      .catch(() => {})
-      .finally(() => { if (!signal.aborted) { setBlogAttrLoading(false); setRefreshing(false); setLastRefreshed(new Date()) } })
+    // Blog attribution is expensive — only fetch on manual refresh, not on interval
+    if (refreshing || !blogAttr) {
+      fetch("/api/dashboard/blog-attribution", { signal })
+        .then((r) => r.json())
+        .then((data) => { if (!signal.aborted && !data.error) setBlogAttr(data) })
+        .catch(() => {})
+        .finally(() => { if (!signal.aborted) setBlogAttrLoading(false) })
+    }
+
+    // Set refresh complete after the last non-blog fetch finishes
+    if (!signal.aborted) { setRefreshing(false); setLastRefreshed(new Date()) }
   }, [])
 
   useEffect(() => {
