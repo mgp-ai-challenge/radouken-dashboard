@@ -252,13 +252,8 @@ export default function DashboardPage() {
     abortRef.current = controller
     const { signal } = controller
 
-    // Only show skeleton loaders on initial load — don't flash them on background refreshes
-    if (!ssKpis)    setSsKpisLoading(true)
-    if (!mqlDau)    setMqlDauLoading(true)
-    if (!okrs)      setOkrsLoading(true)
-    if (!culture)   setCultureLoading(true)
-    if (!fellow)    setFellowLoading(true)
-    if (!meetings)  setMeetingsLoading(true)
+    // Loading states start as true on mount. Never set them back to true —
+    // data updates silently in place so panels don't flash skeleton loaders.
     fetch("/api/self-serve/kpis", { signal })
       .then((r) => r.json())
       .then((data) => { if (!signal.aborted && !data.error) setSsKpis(data) })
