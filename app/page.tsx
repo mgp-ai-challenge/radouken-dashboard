@@ -170,6 +170,25 @@ function getRecommendations(culture: CultureScore | null, okrs: OkrData | null):
   return recs
 }
 
+type FellowItem = {
+  id: string
+  text: string
+  status: string
+  createdAt: string
+  dueDate: string | null
+  overdue: boolean
+  isDuplicate: boolean
+  suggestComplete: boolean
+  aiDetected: boolean
+  assignees: string[]
+}
+type FellowData = {
+  items: FellowItem[]
+  stats: { total: number; overdue: number; duplicates: number; suggestComplete: number; recentlyDone: number }
+}
+
+type FellowFilter = "all" | "overdue" | "duplicates" | "suggest" | "ai"
+
 const PRIORITY_COLOR: Record<string, string> = {
   high: "#ef4444",
   medium: "#f5a623",
@@ -186,6 +205,10 @@ export default function DashboardPage() {
   const [culture, setCulture] = useState<CultureScore | null>(null)
   const [cultureLoading, setCultureLoading] = useState(true)
   const [recStatuses, setRecStatuses] = useState<Record<string, Recommendation["status"]>>({})
+  const [fellow, setFellow] = useState<FellowData | null>(null)
+  const [fellowLoading, setFellowLoading] = useState(true)
+  const [fellowFilter, setFellowFilter] = useState<FellowFilter>("all")
+  const [completingIds, setCompletingIds] = useState<Set<string>>(new Set())
 
   const fetchAll = useCallback(() => {
     setSsKpisLoading(true)
@@ -215,6 +238,13 @@ export default function DashboardPage() {
       .then((data) => { if (!data.error) setCulture(data) })
       .catch(() => {})
       .finally(() => setCultureLoading(false))
+
+    setFellowLoading(true)
+    fetch("/api/dashboard/fellow")
+      .then((r) => r.json())
+      .then((data) => { if (!data.error) setFellow(data) })
+      .catch(() => {})
+      .finally(() => setFellowLoading(false))
   }, [])
 
   useEffect(() => {
@@ -698,6 +728,221 @@ export default function DashboardPage() {
             <p style={{ fontSize: "12px", color: C.muted }}>Could not load activity data</p>
           )}
         </div>
+      </div>
+
+      {/* Fellow Action Items */}
+      <div style={{
+        background: C.card, border: `1px solid ${C.border}`, borderRadius: "16px",
+        padding: "22px 26px", position: "relative", overflow: "hidden",
+        fontFamily: "'Outfit', system-ui, sans-serif",
+      }}>
+        <div style={{
+          position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+          background: `linear-gradient(90deg, transparent, rgba(76,158,245,0.18), transparent)`,
+          pointerEvents: "none",
+        }} />
+        <div style={{
+          position: "absolute", left: 0, top: "6%", bottom: "6%",
+          width: "3px", borderRadius: "0 3px 3px 0", background: "#4c9ef5", opacity: 0.9,
+        }} />
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+          <span style={{
+            width: "28px", height: "28px", borderRadius: "8px",
+            background: "rgba(76,158,245,0.1)", border: "1px solid rgba(76,158,245,0.19)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, fontSize: "13px", color: "#4c9ef5",
+          }}>☐</span>
+          <span style={{
+            fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em",
+            textTransform: "uppercase", color: C.slate,
+          }}>Fellow Action Items</span>
+
+          {fellow && (
+            <div style={{ marginLeft: "auto", display: "flex", gap: "6px" }}>
+              {[
+                { label: `All (${fellow.stats.total})`, value: "all" as FellowFilter },
+                { label: `Overdue (${fellow.stats.overdue})`, value: "overdue" as FellowFilter, color: "#ef4444" },
+                { label: `Duplicates (${fellow.stats.duplicates})`, value: "duplicates" as FellowFilter, color: "#f5a623" },
+                { label: `Can Close (${fellow.stats.suggestComplete})`, value: "suggest" as FellowFilter, color: C.accent },
+              ].map(({ label, value, color }) => (
+                <button key={value} onClick={() => setFellowFilter(value)} style={{
+                  padding: "2px 10px", borderRadius: "999px", fontSize: "10px", fontWeight: 600,
+                  cursor: "pointer", letterSpacing: "0.02em",
+                  border: `1px solid ${fellowFilter === value ? (color ?? "#4c9ef5") : C.border}`,
+                  background: fellowFilter === value ? `${color ?? "#4c9ef5"}18` : "transparent",
+                  color: fellowFilter === value ? (color ?? "#4c9ef5") : C.muted,
+                  fontFamily: "'Outfit', system-ui, sans-serif",
+                }}>{label}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Stats bar */}
+        {fellow && (
+          <div style={{
+            display: "flex", gap: "16px", marginBottom: "14px", padding: "8px 12px",
+            background: C.cardAlt, borderRadius: "8px", border: `1px solid ${C.border}`,
+          }}>
+            {[
+              { label: "Open", value: fellow.stats.total, color: C.sageLight },
+              { label: "Overdue", value: fellow.stats.overdue, color: "#ef4444" },
+              { label: "Duplicates", value: fellow.stats.duplicates, color: "#f5a623" },
+              { label: "Can Close", value: fellow.stats.suggestComplete, color: C.accent },
+              { label: "Done (14d)", value: fellow.stats.recentlyDone, color: C.muted },
+            ].map(({ label, value, color }) => (
+              <div key={label} style={{ textAlign: "center", flex: 1 }}>
+                <p style={{ fontFamily: MONO, fontSize: "16px", fontWeight: 700, color }}>{value}</p>
+                <p style={{ fontSize: "9px", color: C.muted }}>{label}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {fellowLoading ? (
+          <div style={{
+            height: 200, borderRadius: "10px", background: C.card,
+            backgroundImage: `linear-gradient(90deg, ${C.card} 0%, ${C.cardAlt} 50%, ${C.card} 100%)`,
+            backgroundSize: "200% 100%", animation: "bm-shimmer 1.6s ease infinite",
+          }} />
+        ) : fellow ? (
+          <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+            {/* Column headers */}
+            <div style={{
+              display: "grid", gridTemplateColumns: "1fr 90px 80px 70px",
+              gap: "8px", padding: "5px 8px", borderBottom: `1px solid ${C.border}`,
+              position: "sticky", top: 0, background: C.card, zIndex: 1,
+            }}>
+              {["Action Item", "Due Date", "Flags", ""].map((h) => (
+                <span key={h} style={{
+                  fontSize: "9px", color: C.muted, textTransform: "uppercase",
+                  letterSpacing: "0.06em", fontWeight: 700,
+                }}>{h}</span>
+              ))}
+            </div>
+
+            {(() => {
+              const filtered = fellow.items.filter((item) => {
+                if (fellowFilter === "overdue") return item.overdue
+                if (fellowFilter === "duplicates") return item.isDuplicate
+                if (fellowFilter === "suggest") return item.suggestComplete
+                if (fellowFilter === "ai") return item.aiDetected
+                return true
+              })
+
+              if (filtered.length === 0) return (
+                <p style={{ padding: "24px 0", textAlign: "center", fontSize: "12px", color: C.muted }}>
+                  No items in this filter
+                </p>
+              )
+
+              return filtered.map((item, i) => {
+                const isCompleting = completingIds.has(item.id)
+                return (
+                  <div key={item.id} style={{
+                    display: "grid", gridTemplateColumns: "1fr 90px 80px 70px",
+                    gap: "8px", alignItems: "center", padding: "8px",
+                    borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : "none",
+                    background: i % 2 === 0 ? "transparent" : C.cardAlt,
+                    borderRadius: "4px",
+                    opacity: isCompleting ? 0.4 : 1, transition: "opacity 0.3s",
+                  }}>
+                    {/* Text */}
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{
+                        fontSize: "12px", color: C.sage, overflow: "hidden",
+                        textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{item.text}</p>
+                    </div>
+
+                    {/* Due date */}
+                    <span style={{
+                      fontFamily: MONO, fontSize: "10px",
+                      color: item.overdue ? "#ef4444" : item.dueDate ? C.slate : C.muted,
+                      fontWeight: item.overdue ? 600 : 400,
+                    }}>
+                      {item.dueDate ?? "—"}
+                    </span>
+
+                    {/* Flags */}
+                    <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
+                      {item.overdue && (
+                        <span style={{
+                          fontSize: "8px", fontWeight: 700, padding: "1px 5px",
+                          borderRadius: "999px", background: C.redDim, color: "#ef4444",
+                        }}>OVERDUE</span>
+                      )}
+                      {item.isDuplicate && (
+                        <span style={{
+                          fontSize: "8px", fontWeight: 700, padding: "1px 5px",
+                          borderRadius: "999px", background: "rgba(245,166,35,0.12)", color: "#f5a623",
+                        }}>DUPE</span>
+                      )}
+                      {item.suggestComplete && (
+                        <span style={{
+                          fontSize: "8px", fontWeight: 700, padding: "1px 5px",
+                          borderRadius: "999px", background: C.accentDim, color: C.accent,
+                        }}>DONE?</span>
+                      )}
+                      {item.aiDetected && (
+                        <span style={{
+                          fontSize: "8px", fontWeight: 700, padding: "1px 5px",
+                          borderRadius: "999px", background: "rgba(155,127,245,0.12)", color: "#9b7ff5",
+                        }}>AI</span>
+                      )}
+                    </div>
+
+                    {/* Mark done button */}
+                    <button
+                      disabled={isCompleting}
+                      onClick={async () => {
+                        setCompletingIds((prev) => new Set([...prev, item.id]))
+                        try {
+                          const res = await fetch("/api/dashboard/fellow/complete", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ itemId: item.id, completed: true }),
+                          })
+                          if (res.ok) {
+                            setFellow((prev) => prev ? {
+                              ...prev,
+                              items: prev.items.filter((i) => i.id !== item.id),
+                              stats: {
+                                ...prev.stats,
+                                total: prev.stats.total - 1,
+                                overdue: prev.stats.overdue - (item.overdue ? 1 : 0),
+                                duplicates: prev.stats.duplicates - (item.isDuplicate ? 1 : 0),
+                                suggestComplete: prev.stats.suggestComplete - (item.suggestComplete ? 1 : 0),
+                                recentlyDone: prev.stats.recentlyDone + 1,
+                              },
+                            } : null)
+                          }
+                        } finally {
+                          setCompletingIds((prev) => { const n = new Set(prev); n.delete(item.id); return n })
+                        }
+                      }}
+                      style={{
+                        padding: "3px 10px", borderRadius: "6px", fontSize: "10px", fontWeight: 600,
+                        border: `1px solid ${C.accent}40`, background: C.accentDim, color: C.accent,
+                        cursor: isCompleting ? "not-allowed" : "pointer",
+                        fontFamily: "'Outfit', system-ui, sans-serif",
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={(e) => { if (!isCompleting) e.currentTarget.style.background = `${C.accent}30` }}
+                      onMouseLeave={(e) => { e.currentTarget.style.background = C.accentDim }}
+                    >
+                      {isCompleting ? "..." : "✓ Done"}
+                    </button>
+                  </div>
+                )
+              })
+            })()}
+          </div>
+        ) : (
+          <p style={{ fontSize: "12px", color: C.muted }}>Could not load Fellow data</p>
+        )}
       </div>
 
       {/* OKR Panel */}
