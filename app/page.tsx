@@ -207,8 +207,21 @@ export default function DashboardPage() {
   const [okrsLoading, setOkrsLoading] = useState(true)
   const [culture, setCulture] = useState<CultureScore | null>(null)
   const [cultureLoading, setCultureLoading] = useState(true)
-  const [recStatuses, setRecStatuses] = useState<Record<string, Recommendation["status"]>>({})
-  const [recMessages, setRecMessages] = useState<Record<string, string>>({})
+  const [recStatuses, setRecStatuses] = useState<Record<string, Recommendation["status"]>>(() => {
+    if (typeof window === "undefined") return {}
+    try { return JSON.parse(localStorage.getItem("rec-statuses") ?? "{}") } catch { return {} }
+  })
+  const [recMessages, setRecMessages] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {}
+    try { return JSON.parse(localStorage.getItem("rec-messages") ?? "{}") } catch { return {} }
+  })
+
+  useEffect(() => {
+    localStorage.setItem("rec-statuses", JSON.stringify(recStatuses))
+  }, [recStatuses])
+  useEffect(() => {
+    localStorage.setItem("rec-messages", JSON.stringify(recMessages))
+  }, [recMessages])
   const [fellow, setFellow] = useState<FellowData | null>(null)
   const [fellowLoading, setFellowLoading] = useState(true)
   const [fellowFilter, setFellowFilter] = useState<FellowFilter>("all")
