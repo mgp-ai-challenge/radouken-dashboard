@@ -84,7 +84,7 @@ type Recommendation = {
   status: "pending" | "approved" | "declined" | "running" | "done"
 }
 
-function getRecommendations(culture: CultureScore | null, okrs: OkrData | null): Recommendation[] {
+function getRecommendations(culture: CultureScore | null, okrs: OkrData | null, fellow: FellowData | null, meetings: MeetingsData | null): Recommendation[] {
   if (!culture) return []
   const recs: Recommendation[] = []
 
@@ -133,38 +133,37 @@ function getRecommendations(culture: CultureScore | null, okrs: OkrData | null):
     })
   }
 
-  // Fellow action items completion rate
-  if (culture.fellow.actionItemsAssigned > 0) {
-    const completionRate = Math.round((culture.fellow.actionItemsCompleted / culture.fellow.actionItemsAssigned) * 100)
-    if (completionRate < 50) {
-      recs.push({
-        id: "fellow-actions",
-        priority: "medium",
-        title: `Action item completion rate is ${completionRate}%`,
-        description: `You have ${culture.fellow.actionItemsAssigned} action items assigned and only ${culture.fellow.actionItemsCompleted} completed (${completionRate}%). Review overdue items in Fellow and mark completed ones. This is a manual action — I can't access Fellow directly.`,
-        impact: "Improves meeting discipline signals and shows follow-through.",
-        actionLabel: "Open Fellow",
-        actionEndpoint: null,
-        status: "pending",
-      })
-    }
+  // Fellow action items — use live data if available, fall back to culture snapshot
+  const openItems = fellow?.stats.total ?? culture.fellow.actionItemsAssigned
+  const doneItems = fellow?.stats.recentlyDone ?? culture.fellow.actionItemsCompleted
+  const overdueItems = fellow?.stats.overdue ?? 0
+  if (openItems > 0 && overdueItems > 3) {
+    recs.push({
+      id: "fellow-actions",
+      priority: "medium",
+      title: `${overdueItems} overdue action items`,
+      description: `You have ${openItems} open action items with ${overdueItems} overdue. Review them in the Fellow panel above and mark completed ones — you can click Done directly from the dashboard.`,
+      impact: "Reduces overdue count and improves meeting discipline signals.",
+      actionLabel: "Review in Fellow panel above",
+      actionEndpoint: null,
+      status: "pending",
+    })
   }
 
-  // Meeting agenda coverage
-  if (culture.fellow.meetingsInvited > 0 && culture.fellow.meetingsWithAgenda < culture.fellow.meetingsInvited) {
-    const missing = culture.fellow.meetingsInvited - culture.fellow.meetingsWithAgenda
-    if (missing > 3) {
-      recs.push({
-        id: "meeting-agenda",
-        priority: "low",
-        title: `${missing} meetings without agenda`,
-        description: "Ensure all meetings you organize have an agenda set in Fellow before the meeting starts. This improves your meeting discipline score.",
-        impact: "Meeting discipline is at 87% — closing agenda gaps could push it higher.",
-        actionLabel: "Open Fellow",
-        actionEndpoint: null,
-        status: "pending",
-      })
-    }
+  // Meeting agenda coverage — use live meetings data if available
+  const meetingsWithoutAgenda = meetings?.withoutAgendaCount ?? (culture.fellow.meetingsInvited - culture.fellow.meetingsWithAgenda)
+  const totalMeetings = meetings?.total ?? culture.fellow.meetingsInvited
+  if (meetingsWithoutAgenda > 3) {
+    recs.push({
+      id: "meeting-agenda",
+      priority: "low",
+      title: `${meetingsWithoutAgenda} of ${totalMeetings} meetings without agenda`,
+      description: "Generate agendas from the Meetings Without Agenda panel above — click Generate Agenda on each meeting to add one directly in Fellow.",
+      impact: "Meeting discipline is at " + culture.meetingDiscipline.score + "% — closing agenda gaps could push it higher.",
+      actionLabel: "Use panel above",
+      actionEndpoint: null,
+      status: "pending",
+    })
   }
 
   return recs
@@ -1221,7 +1220,7 @@ export default function DashboardPage() {
 
       {/* Recommendations */}
       {(() => {
-        const recs = getRecommendations(culture, okrs)
+        const recs = getRecommendations(culture, okrs, fellow, meetings)
           .filter((r) => {
             const s = recStatuses[r.id]
             return s !== "done" && s !== "approved" && s !== "declined"
