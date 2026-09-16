@@ -243,6 +243,7 @@ export default function DashboardPage() {
   const [blogAttrLoading, setBlogAttrLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
+  const blogLoadedRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
 
   const fetchAll = useCallback(() => {
@@ -296,11 +297,11 @@ export default function DashboardPage() {
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setMeetingsLoading(false) })
 
-    // Blog attribution is expensive — only fetch on manual refresh, not on interval
-    if (refreshing || !blogAttr) {
+    // Blog attribution is expensive — only fetch on first load or manual refresh
+    if (!blogLoadedRef.current) {
       fetch("/api/dashboard/blog-attribution", { signal })
         .then((r) => r.json())
-        .then((data) => { if (!signal.aborted && !data.error) setBlogAttr(data) })
+        .then((data) => { if (!signal.aborted && !data.error) { setBlogAttr(data); blogLoadedRef.current = true } })
         .catch(() => {})
         .finally(() => { if (!signal.aborted) setBlogAttrLoading(false) })
     }
@@ -317,6 +318,7 @@ export default function DashboardPage() {
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true)
+    blogLoadedRef.current = false // force blog attribution refetch
     fetchAll()
   }, [fetchAll])
 
