@@ -303,7 +303,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchAll()
-    const id = setInterval(fetchAll, 60_000)
+    const id = setInterval(fetchAll, 5 * 60_000) // refresh every 5 minutes
     return () => { clearInterval(id); if (abortRef.current) abortRef.current.abort() }
   }, [fetchAll])
 
