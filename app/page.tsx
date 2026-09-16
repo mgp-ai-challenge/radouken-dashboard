@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 
 type SelfServeKpis = {
   currentQuarter: string
@@ -231,55 +231,61 @@ export default function DashboardPage() {
   const [agendaAdded, setAgendaAdded] = useState<Set<string>>(new Set())
   const [refreshing, setRefreshing] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const fetchAll = useCallback(() => {
+    if (abortRef.current) abortRef.current.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    const { signal } = controller
+
     setSsKpisLoading(true)
-    fetch("/api/self-serve/kpis")
+    fetch("/api/self-serve/kpis", { signal })
       .then((r) => r.json())
       .then((data) => { if (!data.error) setSsKpis(data) })
       .catch(() => {})
-      .finally(() => setSsKpisLoading(false))
+      .finally(() => { if (!signal.aborted) setSsKpisLoading(false) })
 
     setMqlDauLoading(true)
-    fetch("/api/dashboard/mql-dau")
+    fetch("/api/dashboard/mql-dau", { signal })
       .then((r) => r.json())
       .then((data) => { if (!data.error) setMqlDau(data) })
       .catch(() => {})
-      .finally(() => setMqlDauLoading(false))
+      .finally(() => { if (!signal.aborted) setMqlDauLoading(false) })
 
     setOkrsLoading(true)
-    fetch("/api/dashboard/okrs")
+    fetch("/api/dashboard/okrs", { signal })
       .then((r) => r.json())
       .then((data) => { if (!data.error) setOkrs(data) })
       .catch(() => {})
-      .finally(() => setOkrsLoading(false))
+      .finally(() => { if (!signal.aborted) setOkrsLoading(false) })
 
     setCultureLoading(true)
-    fetch("/api/dashboard/culture-score")
+    fetch("/api/dashboard/culture-score", { signal })
       .then((r) => r.json())
       .then((data) => { if (!data.error) setCulture(data) })
       .catch(() => {})
-      .finally(() => setCultureLoading(false))
+      .finally(() => { if (!signal.aborted) setCultureLoading(false) })
 
     setFellowLoading(true)
-    fetch("/api/dashboard/fellow")
+    fetch("/api/dashboard/fellow", { signal })
       .then((r) => r.json())
       .then((data) => { if (!data.error) setFellow(data) })
       .catch(() => {})
-      .finally(() => setFellowLoading(false))
+      .finally(() => { if (!signal.aborted) setFellowLoading(false) })
 
     setMeetingsLoading(true)
-    fetch("/api/dashboard/fellow/meetings")
+    fetch("/api/dashboard/fellow/meetings", { signal })
       .then((r) => r.json())
       .then((data) => { if (!data.error) setMeetings(data) })
       .catch(() => {})
-      .finally(() => { setMeetingsLoading(false); setRefreshing(false); setLastRefreshed(new Date()) })
+      .finally(() => { if (!signal.aborted) { setMeetingsLoading(false); setRefreshing(false); setLastRefreshed(new Date()) } })
   }, [])
 
   useEffect(() => {
     fetchAll()
     const id = setInterval(fetchAll, 60_000)
-    return () => clearInterval(id)
+    return () => { clearInterval(id); if (abortRef.current) abortRef.current.abort() }
   }, [fetchAll])
 
   const handleRefresh = useCallback(() => {

@@ -20,6 +20,8 @@ type FellowItem = {
 async function fetchItems(completed: boolean, pageSize = 50): Promise<FellowItem[]> {
   const all: FellowItem[] = []
   let cursor: string | null = null
+  const MAX_PAGES = 20
+  let page = 0
 
   do {
     const body: Record<string, unknown> = {
@@ -42,9 +44,13 @@ async function fetchItems(completed: boolean, pageSize = 50): Promise<FellowItem
 
     const data = await res.json()
     const items = data.action_items?.data ?? []
+    if (items.length === 0) break
     all.push(...items)
+    const prevCursor = cursor
     cursor = data.action_items?.page_info?.cursor ?? null
-  } while (cursor)
+    if (cursor && cursor === prevCursor) break
+    page++
+  } while (cursor && page < MAX_PAGES)
 
   return all
 }

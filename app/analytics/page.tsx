@@ -135,8 +135,11 @@ export default function BugTrackingPage() {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all")
 
   const fetchIssues = useCallback(async () => {
-    const res = await fetch("/api/bug-issues")
-    setStore(await res.json() as BugIssuesStore)
+    try {
+      const res = await fetch("/api/bug-issues")
+      if (!res.ok) return
+      setStore(await res.json() as BugIssuesStore)
+    } catch {}
   }, [])
 
   useEffect(() => { fetchIssues() }, [fetchIssues])

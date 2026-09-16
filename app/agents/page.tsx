@@ -168,6 +168,7 @@ export default function AgentsPage() {
   const fetchAgents = useCallback(async () => {
     try {
       const res = await fetch("/api/agents")
+      if (!res.ok) return
       const data = await res.json()
       setAgents(data)
       setLastRefreshed(new Date())

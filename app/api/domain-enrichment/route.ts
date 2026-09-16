@@ -20,6 +20,14 @@ export async function POST(request: NextRequest) {
     })
   }
 
+  const allowedTypes = ["text/csv", "text/plain", "application/vnd.ms-excel"]
+  if (file.type && !allowedTypes.includes(file.type)) {
+    return new Response(
+      JSON.stringify({ error: `Unsupported file type "${file.type}". Please upload a CSV file.` }),
+      { status: 400, headers: { "Content-Type": "application/json" } },
+    )
+  }
+
   const text = await file.text()
   const { headers, rows } = parseCSV(text)
 

@@ -60,7 +60,10 @@ async function getDealContactMap(deals: Deal[]): Promise<Map<string, string[]>> 
       body: JSON.stringify({ inputs: chunk.map((d) => ({ id: d.id })) }),
       cache: "no-store",
     })
-    if (!res.ok) continue
+    if (!res.ok) {
+      console.warn(`[contact-sources] deal→contact association batch failed: ${res.status}`)
+      continue
+    }
     const data = await res.json()
     for (const item of data.results ?? []) {
       map.set(item.from.id, (item.to ?? []).map((t: { id: string }) => t.id))
@@ -82,7 +85,10 @@ async function getContactSources(contactIds: string[]): Promise<Map<string, stri
       }),
       cache: "no-store",
     })
-    if (!res.ok) continue
+    if (!res.ok) {
+      console.warn(`[contact-sources] contact source batch failed: ${res.status}`)
+      continue
+    }
     const data = await res.json()
     for (const c of data.results ?? []) {
       const p = c.properties ?? {}

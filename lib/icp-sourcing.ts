@@ -211,6 +211,8 @@ export async function isCustomerDomain(domain: string): Promise<boolean> {
       properties: ["domain", "lifecyclestage"],
       limit: 1,
     }
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10_000)
     const res = await fetch("https://api.hubapi.com/crm/v3/objects/companies/search", {
       method: "POST",
       headers: {
@@ -219,7 +221,9 @@ export async function isCustomerDomain(domain: string): Promise<boolean> {
       },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: controller.signal,
     })
+    clearTimeout(timeout)
     if (!res.ok) {
       console.warn(`[icp-sourcing] HubSpot customer check failed for ${domain}: ${res.status}`)
       return false

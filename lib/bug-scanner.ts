@@ -85,6 +85,16 @@ export async function scanCodebase(): Promise<{ filesScanned: number; issuesFoun
     .map((f) => `// FILE: ${path.relative(root, f)}\n${fs.readFileSync(f, "utf-8")}`)
     .join("\n\n")
 
+  const MAX_CODEBASE_BYTES = 400_000 // ~100K tokens
+  const codebaseSize = Buffer.byteLength(codebase, "utf-8")
+  console.log(`[bug-scanner] Codebase payload size: ${(codebaseSize / 1024).toFixed(1)} KB`)
+  if (codebaseSize > MAX_CODEBASE_BYTES) {
+    throw new Error(
+      `Codebase too large to scan in a single prompt (${(codebaseSize / 1024).toFixed(1)} KB, limit ${MAX_CODEBASE_BYTES / 1024} KB). ` +
+      `Reduce the number of scanned files or implement batched scanning.`
+    )
+  }
+
   // Call Claude Haiku
   const client = new Anthropic()
   const message = await client.messages.create({
