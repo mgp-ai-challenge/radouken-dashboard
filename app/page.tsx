@@ -55,6 +55,16 @@ type OkrData = {
   statusLabels: Record<number, string>
 }
 
+type CultureScore = {
+  cultureScore: number
+  scoreBreakdown: Array<{ label: string; value: string; tone: string; detail: string }>
+  github: { commits: number; prsOpened: number; prsMerged: number; activeDays: number }
+  atlassian: { ticketsCreated: number; ticketsResolved: number; pagesCreated: number; pagesEdited: number; jiraComments: number }
+  fellow: { meetingsInvited: number; meetingsWithAgenda: number; actionItemsAssigned: number; actionItemsCompleted: number }
+  meetingDiscipline: { score: number }
+  okrHealth: { healthy: number; warning: number; critical: number; total: number; healthRate: number }
+}
+
 const STATUS_COLOR: Record<number, string> = {
   1: "#05c79b",  // On Track
   2: "#f5a623",  // At Risk
@@ -70,6 +80,8 @@ export default function DashboardPage() {
   const [mqlDauLoading, setMqlDauLoading] = useState(true)
   const [okrs, setOkrs] = useState<OkrData | null>(null)
   const [okrsLoading, setOkrsLoading] = useState(true)
+  const [culture, setCulture] = useState<CultureScore | null>(null)
+  const [cultureLoading, setCultureLoading] = useState(true)
 
   const fetchAll = useCallback(() => {
     setSsKpisLoading(true)
@@ -92,6 +104,13 @@ export default function DashboardPage() {
       .then((data) => { if (!data.error) setOkrs(data) })
       .catch(() => {})
       .finally(() => setOkrsLoading(false))
+
+    setCultureLoading(true)
+    fetch("/api/dashboard/culture-score")
+      .then((r) => r.json())
+      .then((data) => { if (!data.error) setCulture(data) })
+      .catch(() => {})
+      .finally(() => setCultureLoading(false))
   }, [])
 
   useEffect(() => {
@@ -398,6 +417,183 @@ export default function DashboardPage() {
           <p style={{ fontSize: "12px", color: C.muted }}>Could not load MQL DAU data</p>
         )}
       </div>
+      </div>
+
+      {/* Culture Score + Activity */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
+
+        {/* Culture Score */}
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: "16px",
+          padding: "22px 26px", position: "relative", overflow: "hidden",
+          fontFamily: "'Outfit', system-ui, sans-serif",
+        }}>
+          <div style={{
+            position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+            background: `linear-gradient(90deg, transparent, rgba(245,166,35,0.18), transparent)`,
+            pointerEvents: "none",
+          }} />
+          <div style={{
+            position: "absolute", left: 0, top: "18%", bottom: "18%",
+            width: "3px", borderRadius: "0 3px 3px 0",
+            background: culture && culture.cultureScore >= 80 ? C.accent : culture && culture.cultureScore >= 50 ? "#f5a623" : "#ef4444",
+            opacity: 0.9,
+          }} />
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
+            <span style={{
+              width: "28px", height: "28px", borderRadius: "8px",
+              background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.19)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, fontSize: "13px", color: "#f5a623",
+            }}>♦</span>
+            <span style={{
+              fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em",
+              textTransform: "uppercase", color: C.slate,
+            }}>Culture Score</span>
+          </div>
+
+          {cultureLoading ? (
+            <div style={{
+              height: 48, width: 80, borderRadius: "10px", background: C.card,
+              backgroundImage: `linear-gradient(90deg, ${C.card} 0%, ${C.cardAlt} 50%, ${C.card} 100%)`,
+              backgroundSize: "200% 100%", animation: "bm-shimmer 1.6s ease infinite",
+            }} />
+          ) : culture ? (
+            <>
+              <p style={{
+                fontSize: "52px", fontWeight: 700, lineHeight: 1, letterSpacing: "-0.03em",
+                fontFamily: MONO, marginBottom: "6px",
+                color: culture.cultureScore >= 80 ? C.accent : culture.cultureScore >= 50 ? "#f5a623" : "#ef4444",
+              }}>
+                {culture.cultureScore}
+              </p>
+              <p style={{ fontSize: "10px", color: C.muted, marginBottom: "14px" }}>out of 100</p>
+
+              {/* Breakdown */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                {culture.scoreBreakdown.map((item, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: "11px", color: C.sage }}>{item.label}</span>
+                    <span style={{
+                      fontFamily: MONO, fontSize: "11px", fontWeight: 600,
+                      color: item.tone === "negative" ? "#ef4444" : item.tone === "final" ? C.sageLight : C.muted,
+                    }}>{item.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* OKR Health */}
+              <div style={{ marginTop: "14px", paddingTop: "12px", borderTop: `1px solid ${C.border}` }}>
+                <p style={{ fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "8px" }}>
+                  OKR Health
+                </p>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {[
+                    { label: "Healthy", count: culture.okrHealth.healthy, color: C.accent },
+                    { label: "Warning", count: culture.okrHealth.warning, color: "#f5a623" },
+                    { label: "Critical", count: culture.okrHealth.critical, color: "#ef4444" },
+                  ].map(({ label, count, color }) => (
+                    <div key={label} style={{
+                      flex: 1, textAlign: "center", padding: "6px 4px",
+                      background: `${color}12`, borderRadius: "8px", border: `1px solid ${color}25`,
+                    }}>
+                      <p style={{ fontFamily: MONO, fontSize: "16px", fontWeight: 700, color }}>{count}</p>
+                      <p style={{ fontSize: "9px", color: C.muted }}>{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <p style={{ fontSize: "12px", color: C.muted }}>Could not load culture score</p>
+          )}
+        </div>
+
+        {/* Activity Grid */}
+        <div style={{
+          background: C.card, border: `1px solid ${C.border}`, borderRadius: "16px",
+          padding: "22px 26px", position: "relative", overflow: "hidden",
+          fontFamily: "'Outfit', system-ui, sans-serif",
+        }}>
+          <div style={{
+            position: "absolute", top: 0, left: "10%", right: "10%", height: "1px",
+            background: `linear-gradient(90deg, transparent, rgba(245,166,35,0.18), transparent)`,
+            pointerEvents: "none",
+          }} />
+
+          <p style={{
+            fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em",
+            textTransform: "uppercase", color: C.muted, marginBottom: "16px",
+          }}>Activity — Last 14 Days</p>
+
+          {cultureLoading ? (
+            <div style={{
+              height: 120, borderRadius: "10px", background: C.card,
+              backgroundImage: `linear-gradient(90deg, ${C.card} 0%, ${C.cardAlt} 50%, ${C.card} 100%)`,
+              backgroundSize: "200% 100%", animation: "bm-shimmer 1.6s ease infinite",
+            }} />
+          ) : culture ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+              {/* GitHub */}
+              <div style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: "10px", padding: "14px" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "10px" }}>GitHub</p>
+                {[
+                  { label: "Commits", value: culture.github.commits },
+                  { label: "PRs Opened", value: culture.github.prsOpened },
+                  { label: "PRs Merged", value: culture.github.prsMerged },
+                  { label: "Active Days", value: culture.github.activeDays },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "11px", color: C.sage }}>{label}</span>
+                    <span style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: value > 0 ? C.sageLight : C.muted }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Atlassian */}
+              <div style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: "10px", padding: "14px" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "10px" }}>Atlassian</p>
+                {[
+                  { label: "Tickets Created", value: culture.atlassian.ticketsCreated },
+                  { label: "Tickets Resolved", value: culture.atlassian.ticketsResolved },
+                  { label: "Pages Created", value: culture.atlassian.pagesCreated },
+                  { label: "Jira Comments", value: culture.atlassian.jiraComments },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "11px", color: C.sage }}>{label}</span>
+                    <span style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: value > 0 ? C.sageLight : C.muted }}>{value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Meetings */}
+              <div style={{ background: C.cardAlt, border: `1px solid ${C.border}`, borderRadius: "10px", padding: "14px" }}>
+                <p style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted, marginBottom: "10px" }}>Meetings</p>
+                {[
+                  { label: "Invited", value: culture.fellow.meetingsInvited },
+                  { label: "With Agenda", value: culture.fellow.meetingsWithAgenda },
+                  { label: "Actions Assigned", value: culture.fellow.actionItemsAssigned },
+                  { label: "Actions Done", value: culture.fellow.actionItemsCompleted },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "11px", color: C.sage }}>{label}</span>
+                    <span style={{ fontFamily: MONO, fontSize: "11px", fontWeight: 600, color: value > 0 ? C.sageLight : C.muted }}>{value}</span>
+                  </div>
+                ))}
+                <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "11px", color: C.sage }}>Discipline</span>
+                  <span style={{
+                    fontFamily: MONO, fontSize: "11px", fontWeight: 600,
+                    color: culture.meetingDiscipline.score >= 80 ? C.accent : culture.meetingDiscipline.score >= 50 ? "#f5a623" : "#ef4444",
+                  }}>{culture.meetingDiscipline.score}%</span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p style={{ fontSize: "12px", color: C.muted }}>Could not load activity data</p>
+          )}
+        </div>
       </div>
 
       {/* OKR Panel */}
