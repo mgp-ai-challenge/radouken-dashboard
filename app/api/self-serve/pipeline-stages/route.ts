@@ -29,6 +29,8 @@ const Q1_END   = "2026-04-01" // exclusive
 const Q2_START = "2026-04-01"
 const Q3_START = "2026-07-01"
 const Q3_END   = "2026-10-01" // exclusive
+const Q4_START = "2026-10-01"
+const Q4_END   = "2027-01-01" // exclusive
 
 const DEAL_PROPS = ["dealstage", "dealname", "normalised_dau__us_dau__tier_1__065"]
 
@@ -70,7 +72,7 @@ function groupByStage(deals: HSDeal[], portalId: string) {
 
 export async function GET() {
   try {
-    const [q2Deals, q1Deals, q3Deals, portalId] = await Promise.all([
+    const [q2Deals, q1Deals, q3Deals, q4Deals, portalId] = await Promise.all([
       // Q2: deals created in Q2
       searchDeals(
         [
@@ -98,12 +100,22 @@ export async function GET() {
         ],
         DEAL_PROPS
       ),
+      // Q4: deals created in Q4
+      searchDeals(
+        [
+          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
+          { propertyName: "createdate", operator: "GTE", value: Q4_START },
+          { propertyName: "createdate", operator: "LT",  value: Q4_END },
+        ],
+        DEAL_PROPS
+      ),
       getPortalId(),
     ])
 
     const grouped   = groupByStage(q2Deals, portalId)
     const groupedQ1 = groupByStage(q1Deals, portalId)
     const groupedQ3 = groupByStage(q3Deals, portalId)
+    const groupedQ4 = groupByStage(q4Deals, portalId)
 
     const result = STAGE_ORDER.map((stageId) => ({
       stageId,
@@ -111,12 +123,15 @@ export async function GET() {
       normDau:   Math.round(grouped[stageId]?.normDau ?? 0),
       normDauQ1: Math.round(groupedQ1[stageId]?.normDau ?? 0),
       normDauQ3: Math.round(groupedQ3[stageId]?.normDau ?? 0),
+      normDauQ4: Math.round(groupedQ4[stageId]?.normDau ?? 0),
       count:     grouped[stageId]?.deals.length ?? 0,
       countQ1:   groupedQ1[stageId]?.deals.length ?? 0,
       countQ3:   groupedQ3[stageId]?.deals.length ?? 0,
+      countQ4:   groupedQ4[stageId]?.deals.length ?? 0,
       deals:     grouped[stageId]?.deals ?? [],
       dealsQ1:   groupedQ1[stageId]?.deals ?? [],
       dealsQ3:   groupedQ3[stageId]?.deals ?? [],
+      dealsQ4:   groupedQ4[stageId]?.deals ?? [],
     }))
 
     return NextResponse.json(result)
