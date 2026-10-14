@@ -113,13 +113,14 @@ export async function GET() {
     const thisMondayStr = thisMonday.toISOString().split("T")[0]
     const lastMondayStr = lastMonday.toISOString().split("T")[0]
 
-    // Current quarter: deals created this quarter that are now Approved or Live
+    // Current quarter: deals approved this quarter (by approval date, not creation date)
+    // Deals created in the previous quarter but approved in the current one must count
     const [qtdDeals, curAll, prevDeals, prevAll, hsQtdDeals] = await Promise.all([
       searchDeals(
         [
-          { propertyName: "pipeline",   operator: "EQ", value: PIPELINE },
-          { propertyName: "dealstage",  operator: "IN", values: ACTIVE_STAGES },
-          { propertyName: "createdate", operator: "GTE", value: curStart },
+          { propertyName: "pipeline",                     operator: "EQ", value: PIPELINE },
+          { propertyName: "dealstage",                    operator: "IN", values: ACTIVE_STAGES },
+          { propertyName: "hs_v2_date_entered_107224655", operator: "GTE", value: curStart },
         ],
         ["normalised_dau__us_dau__tier_1__065", "hs_v2_date_entered_107224655"]
       ),
@@ -131,13 +132,13 @@ export async function GET() {
         ],
         ["createdate"]
       ),
-      // Previous quarter: same logic
+      // Previous quarter: deals approved in the previous quarter
       searchDeals(
         [
-          { propertyName: "pipeline",   operator: "EQ",  value: PIPELINE },
-          { propertyName: "dealstage",  operator: "IN",  values: ACTIVE_STAGES },
-          { propertyName: "createdate", operator: "GTE", value: prevStart },
-          { propertyName: "createdate", operator: "LT",  value: prevEnd },
+          { propertyName: "pipeline",                     operator: "EQ",  value: PIPELINE },
+          { propertyName: "dealstage",                    operator: "IN",  values: ACTIVE_STAGES },
+          { propertyName: "hs_v2_date_entered_107224655", operator: "GTE", value: prevStart },
+          { propertyName: "hs_v2_date_entered_107224655", operator: "LT",  value: prevEnd },
         ],
         ["normalised_dau__us_dau__tier_1__065"]
       ),
