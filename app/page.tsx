@@ -42,11 +42,6 @@ const C = {
 }
 const MONO = "'JetBrains Mono', 'Cascadia Code', 'SF Mono', ui-monospace, monospace"
 
-type MqlDau = {
-  mqlNormDau: number
-  dealCount: number
-}
-
 type OkrMetric = { name: string; current: number; target: number; start: number }
 type OkrKR = { id: string; title: string; progress: number; status: number; metric: OkrMetric | null }
 type OkrData = {
@@ -200,8 +195,6 @@ const PRIORITY_COLOR: Record<string, string> = {
 export default function DashboardPage() {
   const [ssKpis, setSsKpis] = useState<SelfServeKpis | null>(null)
   const [ssKpisLoading, setSsKpisLoading] = useState(true)
-  const [mqlDau, setMqlDau] = useState<MqlDau | null>(null)
-  const [mqlDauLoading, setMqlDauLoading] = useState(true)
   const [okrs, setOkrs] = useState<OkrData | null>(null)
   const [okrsLoading, setOkrsLoading] = useState(true)
   const [culture, setCulture] = useState<CultureScore | null>(null)
@@ -246,12 +239,6 @@ export default function DashboardPage() {
       .then((data) => { if (!signal.aborted && !data.error) setSsKpis(data) })
       .catch(() => {})
       .finally(() => { if (!signal.aborted) setSsKpisLoading(false) })
-
-    fetch("/api/dashboard/mql-dau", { signal })
-      .then((r) => r.json())
-      .then((data) => { if (!signal.aborted && !data.error) setMqlDau(data) })
-      .catch(() => {})
-      .finally(() => { if (!signal.aborted) setMqlDauLoading(false) })
 
     fetch("/api/dashboard/okrs", { signal })
       .then((r) => r.json())
@@ -503,138 +490,6 @@ export default function DashboardPage() {
         `}</style>
       </div>
 
-      {/* MQL Norm DAU */}
-      <div style={{
-        background:   C.card,
-        border:       `1px solid ${C.border}`,
-        borderRadius: "16px",
-        padding:      "22px 26px",
-        position:     "relative",
-        overflow:     "hidden",
-        fontFamily:   "'Outfit', system-ui, sans-serif",
-      }}>
-        {/* Top shimmer line */}
-        <div style={{
-          position:   "absolute",
-          top: 0, left: "10%", right: "10%",
-          height:     "1px",
-          background: `linear-gradient(90deg, transparent, rgba(76,158,245,0.18), transparent)`,
-          pointerEvents: "none",
-        }} />
-        {/* Left accent stripe */}
-        <div style={{
-          position:     "absolute",
-          left:         0, top: "18%", bottom: "18%",
-          width:        "3px",
-          borderRadius: "0 3px 3px 0",
-          background:   "#4c9ef5",
-          opacity:      0.9,
-        }} />
-
-        {/* Icon + label row */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" }}>
-          <span style={{
-            width:          "28px",
-            height:         "28px",
-            borderRadius:   "8px",
-            background:     "rgba(76,158,245,0.1)",
-            border:         "1px solid rgba(76,158,245,0.19)",
-            display:        "flex",
-            alignItems:     "center",
-            justifyContent: "center",
-            flexShrink:     0,
-            fontSize:       "13px",
-            color:          "#4c9ef5",
-          }}>
-            ⬡
-          </span>
-          <span style={{
-            fontSize:      "9.5px",
-            fontWeight:    700,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color:         C.slate,
-          }}>
-            MQL Norm DAU QTD
-          </span>
-          {ssKpis && (
-            <span style={{ fontSize: "10px", color: C.muted, marginLeft: "4px" }}>
-              — {ssKpis.currentQuarter}
-            </span>
-          )}
-        </div>
-
-        {mqlDauLoading ? (
-          <div style={{
-            height:          48,
-            width:           140,
-            borderRadius:    "10px",
-            background:      C.card,
-            backgroundImage: `linear-gradient(90deg, ${C.card} 0%, ${C.cardAlt} 50%, ${C.card} 100%)`,
-            backgroundSize:  "200% 100%",
-            animation:       "bm-shimmer 1.6s ease infinite",
-          }} />
-        ) : mqlDau ? (
-          <>
-            {/* Deal count — big KPI */}
-            <p style={{
-              fontSize:      "38px",
-              fontWeight:    700,
-              lineHeight:    1,
-              color:         C.sageLight,
-              letterSpacing: "-0.025em",
-              fontFamily:    MONO,
-              marginBottom:  "8px",
-            }}>
-              {mqlDau.dealCount}
-            </p>
-
-            {/* Norm DAU sub-value */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", marginTop: "2px" }}>
-              <span style={{
-                display:       "inline-flex",
-                alignItems:    "center",
-                gap:           "3px",
-                background:    "rgba(76,158,245,0.15)",
-                color:         "#4c9ef5",
-                padding:       "2px 8px",
-                borderRadius:  "999px",
-                fontSize:      "11px",
-                fontWeight:    600,
-                letterSpacing: "0.01em",
-              }}>
-                {fmtDau(mqlDau.mqlNormDau)} Norm DAU
-              </span>
-              <span style={{ fontSize: "11px", color: C.muted }}>
-                entered MQL or sourced Q3 2026
-              </span>
-            </div>
-
-            {/* Progress bar — 135 target */}
-            <div style={{ marginTop: "14px" }}>
-              <div style={{
-                height:       "2px",
-                background:   C.border,
-                borderRadius: "99px",
-                overflow:     "hidden",
-              }}>
-                <div style={{
-                  height:       "100%",
-                  width:        `${Math.min((mqlDau.dealCount / 135) * 100, 100)}%`,
-                  background:   "linear-gradient(90deg, #4c9ef5, #7bb8ff)",
-                  borderRadius: "99px",
-                  transition:   "width 1.2s cubic-bezier(0.4,0,0.2,1)",
-                }} />
-              </div>
-              <p style={{ fontSize: "10px", color: C.muted, marginTop: "5px" }}>
-                {Math.round((mqlDau.dealCount / 135) * 100)}% of 135 target
-              </p>
-            </div>
-          </>
-        ) : (
-          <p style={{ fontSize: "12px", color: C.muted }}>Could not load MQL DAU data</p>
-        )}
-      </div>
       </div>
 
       {/* Culture Score + Activity */}
