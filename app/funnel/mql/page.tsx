@@ -55,6 +55,35 @@ type MqlDeal = {
   lastActivity: string | null
 }
 
+type GpDeal = {
+  id: string
+  name: string
+  pipeline: string
+  stage: string
+  amount: number
+  gpAmount: number
+  weight: number
+  weightLabel: string
+  dealGp: number
+}
+
+type GpExcluded = {
+  id: string
+  name: string
+  pipeline: string
+  stage: string
+  reason: string
+  amount: number
+}
+
+type GpBreakdown = {
+  included: GpDeal[]
+  excluded: GpExcluded[]
+  includedCount: number
+  excludedCount: number
+  dealsWithNoAmount: number
+}
+
 type MqlData = {
   quarter: string
   mqlNormDau: number
@@ -64,6 +93,7 @@ type MqlData = {
   stillInMql: number
   mqlDealsList: MqlDeal[]
   pipelineSplit: PipelineRow[]
+  gpBreakdown: GpBreakdown
 }
 
 function fmtDau(n: number) {
@@ -225,6 +255,7 @@ export default function MqlPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [showGpSummary, setShowGpSummary] = useState(false)
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -623,6 +654,165 @@ export default function MqlPage() {
           )}
         </div>
       </div>
+
+      {/* GP Summary — On Demand */}
+      {data && !loading && !error && (
+        <div>
+          <button
+            onClick={() => setShowGpSummary((v) => !v)}
+            style={{
+              display:      "flex",
+              alignItems:   "center",
+              gap:          "6px",
+              background:   "transparent",
+              border:       `1px solid ${C.border}`,
+              borderRadius: "10px",
+              padding:      "8px 16px",
+              fontSize:     "12px",
+              fontWeight:   600,
+              color:        C.sage,
+              cursor:       "pointer",
+              transition:   "border-color 0.2s",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.accent }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border }}
+          >
+            {showGpSummary ? "▾" : "▸"} GP Calculation Summary
+          </button>
+
+          {showGpSummary && (
+            <div style={{
+              background:   C.card,
+              border:       `1px solid ${C.border}`,
+              borderRadius: "16px",
+              padding:      "24px",
+              marginTop:    "12px",
+            }}>
+              <p style={{ fontSize: "14px", fontWeight: 700, color: C.sageLight, marginBottom: "6px" }}>
+                Gross Profit Calculation — {data.quarter}
+              </p>
+              <p style={{ fontSize: "11px", color: C.muted, marginBottom: "16px" }}>
+                Weighted GP: <span style={{ fontFamily: MONO, color: C.sage }}>{fmtMoney(data.weightedGp)}</span> · Pipeline: <span style={{ fontFamily: MONO, color: C.sage }}>{fmtMoney(data.rawGp)}</span> · Target: $1.5M · Stretch: $1.8M
+              </p>
+
+              {/* Rules */}
+              <div style={{ background: C.cardAlt, borderRadius: "10px", padding: "14px 16px", marginBottom: "16px", fontSize: "11px", color: C.muted, lineHeight: 1.6 }}>
+                <p style={{ fontWeight: 700, color: C.sage, marginBottom: "4px" }}>How this is calculated:</p>
+                <p>• <strong style={{ color: C.sage }}>Weight</strong> = 1.0 if deal stage is Signed or later, otherwise the HubSpot stage probability</p>
+                <p>• <strong style={{ color: C.sage }}>GP Amount</strong> = deal amount (Indirect / Mediation), or deal amount or $125k default (UA / Tricky)</p>
+                <p>• <strong style={{ color: C.sage }}>Deal GP</strong> = GP Amount × Weight</p>
+                <p>• <strong style={{ color: C.sage }}>QTD GP</strong> = sum of all included Deal GPs</p>
+                <p>• Deals in Qualified Out / Closed Lost stages are <strong style={{ color: C.red }}>excluded</strong> from the total</p>
+              </div>
+
+              {/* Included deals table */}
+              <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginBottom: "10px" }}>
+                Included Deals ({data.gpBreakdown.includedCount}) — {fmtMoney(data.weightedGp)} weighted GP
+              </p>
+
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                      {["Deal", "Pipeline", "Stage", "Amount", "GP Amount", "Weight", "Deal GP"].map((h) => (
+                        <th key={h} style={{ textAlign: h === "Deal" ? "left" : "right", padding: "6px 8px", fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted }}>
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.gpBreakdown.included.map((d) => (
+                      <tr key={d.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                        <td style={{ padding: "6px 8px", color: C.sage }}>
+                          <a
+                            href={`https://app.hubspot.com/contacts/5606823/deal/${d.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: C.sage, textDecoration: "none" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = C.accent }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = C.sage }}
+                          >
+                            {d.name}
+                          </a>
+                        </td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted, fontSize: "10px" }}>{d.pipeline}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted, fontSize: "10px" }}>{d.stage}</td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, color: C.muted }}>
+                          {d.amount > 0 ? fmtMoney(d.amount) : "—"}
+                        </td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, color: C.sage }}>
+                          {fmtMoney(d.gpAmount)}
+                          {d.amount === 0 && <span style={{ fontSize: "9px", color: C.amber, marginLeft: "4px" }}>default</span>}
+                        </td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, color: d.weightLabel === "Signed" ? C.accent : C.muted }}>
+                          {d.weightLabel}
+                        </td>
+                        <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, fontWeight: 600, color: C.sageLight }}>
+                          {fmtMoney(d.dealGp)}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr style={{ borderTop: `2px solid ${C.border}` }}>
+                      <td colSpan={6} style={{ padding: "8px 8px", fontWeight: 700, color: C.sage }}>Total Weighted GP</td>
+                      <td style={{ padding: "8px 8px", textAlign: "right", fontFamily: MONO, fontWeight: 700, fontSize: "13px", color: C.accent }}>
+                        {fmtMoney(data.weightedGp)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Deals with no amount */}
+              {data.gpBreakdown.dealsWithNoAmount > 0 && (
+                <p style={{ fontSize: "10px", color: C.amber, marginTop: "12px" }}>
+                  {data.gpBreakdown.dealsWithNoAmount} non-UA deal{data.gpBreakdown.dealsWithNoAmount > 1 ? "s" : ""} with no amount set — contributing $0 to GP until amount is filled in.
+                </p>
+              )}
+
+              {/* Excluded deals */}
+              {data.gpBreakdown.excluded.length > 0 && (
+                <>
+                  <p style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.red, marginTop: "20px", marginBottom: "10px" }}>
+                    Excluded Deals ({data.gpBreakdown.excludedCount}) — Qualified Out / Closed Lost
+                  </p>
+                  <p style={{ fontSize: "10px", color: C.muted, marginBottom: "10px" }}>
+                    These deals entered MQL in {data.quarter} but have since been lost or qualified out. Their GP is not counted in the total. If the total GP has decreased, check here first.
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    {data.gpBreakdown.excluded.map((d) => (
+                      <a
+                        key={d.id}
+                        href={`https://app.hubspot.com/contacts/5606823/deal/${d.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          padding: "6px 10px", borderRadius: "6px", background: C.cardAlt,
+                          textDecoration: "none", fontSize: "11px",
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ color: C.sage, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{d.name}</span>
+                          <span style={{ fontSize: "9px", color: C.muted }}>{d.pipeline} · {d.stage}</span>
+                        </div>
+                        <div style={{ textAlign: "right", flexShrink: 0 }}>
+                          {d.amount > 0 && <span style={{ fontFamily: MONO, color: C.red, fontSize: "10px" }}>-{fmtMoney(d.amount)}</span>}
+                          <span style={{
+                            display: "inline-block", marginLeft: "8px", padding: "1px 6px",
+                            borderRadius: "999px", background: `${C.red}18`, color: C.red,
+                            fontSize: "9px", fontWeight: 600,
+                          }}>{d.reason}</span>
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
