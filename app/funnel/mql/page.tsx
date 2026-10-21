@@ -256,6 +256,7 @@ export default function MqlPage() {
   const [error, setError] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [showGpSummary, setShowGpSummary] = useState(false)
+  const [mqlPipelineFilter, setMqlPipelineFilter] = useState<string>("All")
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true)
@@ -587,16 +588,42 @@ export default function MqlPage() {
           overflowY:    "auto",
           maxHeight:    "600px",
         }}>
-          <p style={{
-            fontSize:      "10px",
-            fontWeight:    700,
-            letterSpacing: "0.13em",
-            textTransform: "uppercase",
-            color:         C.muted,
-            marginBottom:  "14px",
-          }}>
-            Deals Still in MQL {data ? `— ${data.stillInMql}` : ""}
-          </p>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+            <p style={{
+              fontSize:      "10px",
+              fontWeight:    700,
+              letterSpacing: "0.13em",
+              textTransform: "uppercase",
+              color:         C.muted,
+              margin:        0,
+            }}>
+              Deals Still in MQL {data ? `— ${mqlPipelineFilter === "All" ? data.stillInMql : data.mqlDealsList.filter((d) => d.pipeline === mqlPipelineFilter).length}` : ""}
+            </p>
+            {data && data.mqlDealsList.length > 0 && (
+              <div style={{ display: "flex", gap: "3px", flexWrap: "wrap" }}>
+                {["All", ...Array.from(new Set(data.mqlDealsList.map((d) => d.pipeline)))].map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setMqlPipelineFilter(p)}
+                    style={{
+                      padding:      "2px 8px",
+                      borderRadius: "999px",
+                      fontSize:     "9px",
+                      fontWeight:   600,
+                      cursor:       "pointer",
+                      border:       `1px solid ${mqlPipelineFilter === p ? C.accent : C.border}`,
+                      background:   mqlPipelineFilter === p ? C.accentDim : "transparent",
+                      color:        mqlPipelineFilter === p ? C.accent : C.muted,
+                      letterSpacing: "0.02em",
+                      whiteSpace:   "nowrap",
+                    }}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {loading ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -608,7 +635,7 @@ export default function MqlPage() {
             <p style={{ fontSize: "12px", color: C.red }}>Could not load data</p>
           ) : data && data.mqlDealsList.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              {data.mqlDealsList.map((d) => (
+              {data.mqlDealsList.filter((d) => mqlPipelineFilter === "All" || d.pipeline === mqlPipelineFilter).map((d) => (
                 <a
                   key={d.id}
                   href={`https://app.hubspot.com/contacts/5606823/deal/${d.id}`}
