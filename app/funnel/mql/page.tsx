@@ -48,6 +48,7 @@ type MqlData = {
   quarter: string
   mqlNormDau: number
   dealCount: number
+  stillInMql: number
   pipelineSplit: PipelineRow[]
 }
 
@@ -221,9 +222,7 @@ export default function MqlPage() {
       display:       "flex",
       flexDirection: "column",
       gap:           "16px",
-      maxWidth:      "900px",
       width:         "100%",
-      margin:        "0 auto",
       padding:       "32px 24px",
       fontFamily:    "'Outfit', system-ui, sans-serif",
       color:         C.sage,
@@ -270,7 +269,7 @@ export default function MqlPage() {
       </div>
 
       {/* Top KPI row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px" }}>
         {/* MQL Count */}
         <div style={{
           background:   C.card,
@@ -377,6 +376,42 @@ export default function MqlPage() {
             <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em" }}>
               {data.pipelineSplit.length}
             </p>
+          )}
+        </div>
+
+        {/* Still in MQL */}
+        <div style={{
+          background:   C.card,
+          border:       `1px solid ${C.border}`,
+          borderRadius: "14px",
+          padding:      "20px 22px",
+          position:     "relative",
+          overflow:     "hidden",
+        }}>
+          <div style={{
+            position:     "absolute",
+            left:         0, top: "18%", bottom: "18%",
+            width:        "3px",
+            borderRadius: "0 3px 3px 0",
+            background:   C.amber,
+            opacity:      0.9,
+          }} />
+          <p style={{ fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginBottom: "8px" }}>
+            Still in MQL
+          </p>
+          {loading ? (
+            <div style={{ height: 40, width: 40, borderRadius: "8px", background: C.cardAlt }} />
+          ) : error ? (
+            <p style={{ fontSize: "12px", color: C.red }}>Error</p>
+          ) : data && (
+            <>
+              <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em" }}>
+                {data.stillInMql}
+              </p>
+              <p style={{ fontSize: "10px", color: C.muted, marginTop: "6px" }}>
+                {data.dealCount > 0 ? Math.round((data.stillInMql / data.dealCount) * 100) : 0}% of total MQLs
+              </p>
+            </>
           )}
         </div>
       </div>

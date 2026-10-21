@@ -40,7 +40,7 @@ export async function GET() {
           { propertyName: "lead_source", operator: "EQ", value: qLabel },
         ],
       ],
-      [DAU_PROP, "pipeline", "dealname"]
+      [DAU_PROP, "pipeline", "dealname", "dealstage"]
     )
 
     let totalNormDau = 0
@@ -77,10 +77,14 @@ export async function GET() {
       }))
       .sort((a, b) => b.count - a.count)
 
+    // Deals currently sitting in the MQL stage (stage 1157536)
+    const stillInMql = deals.filter((d) => d.properties.dealstage === "1157536").length
+
     return NextResponse.json({
       quarter,
       mqlNormDau: Math.round(totalNormDau),
       dealCount: deals.length,
+      stillInMql,
       pipelineSplit,
     })
   } catch (e) {
