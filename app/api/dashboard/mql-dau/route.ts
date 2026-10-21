@@ -27,6 +27,15 @@ const PIPELINE_NAMES: Record<string, string> = {
 const UA_PIPELINES = new Set(["145970019", "867371640"])
 const UA_DEFAULT_GP = 125_000
 
+// MQL stage IDs across all pipelines (each pipeline has its own)
+const MQL_STAGE_IDS = new Set([
+  "1157536",    // Indirect — Marketing Qualified Lead
+  "1439890464", // Bidmachine - Sales — Marketing Qualified
+  "1412577578", // UA: Sales & AM — Marketing Qualified Lead
+  "1458581345", // Agentix — Marketing Qualified Lead
+  "1298083687", // UA Tricky — Marketing Qualified Lead
+])
+
 // Stages at "Signed or later" — weight = 1.0 regardless of hs_deal_stage_probability
 const SIGNED_STAGES = new Set([
   // Bidmachine - Sales
@@ -215,7 +224,7 @@ export async function GET() {
       .sort((a, b) => b.count - a.count)
 
     // Deals currently sitting in the MQL stage (stage 1157536)
-    const mqlDeals = deals.filter((d) => d.properties.dealstage === "1157536")
+    const mqlDeals = deals.filter((d) => MQL_STAGE_IDS.has(d.properties.dealstage ?? ""))
 
     const mqlDealsList = mqlDeals.map((d) => {
       const ownerId = d.properties.hubspot_owner_id
