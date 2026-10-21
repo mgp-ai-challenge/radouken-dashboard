@@ -157,22 +157,33 @@ function PipelineGroup({ row, total }: { row: PipelineRow; total: number }) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "3px", maxHeight: "200px", overflowY: "auto" }}>
             {row.deals.map((d) => (
-              <div key={d.id} style={{
-                display:    "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding:    "4px 8px",
-                borderRadius: "6px",
-                background: C.cardAlt,
-                fontSize:   "11px",
-              }}>
+              <a
+                key={d.id}
+                href={`https://app.hubspot.com/contacts/5606823/deal/${d.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display:        "flex",
+                  alignItems:     "center",
+                  justifyContent: "space-between",
+                  padding:        "4px 8px",
+                  borderRadius:   "6px",
+                  background:     C.cardAlt,
+                  fontSize:       "11px",
+                  textDecoration: "none",
+                  transition:     "background 0.15s",
+                  cursor:         "pointer",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = C.border }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = C.cardAlt }}
+              >
                 <span style={{ color: C.sage, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {d.name}
                 </span>
                 <span style={{ fontFamily: MONO, fontSize: "10px", color: C.muted, flexShrink: 0, marginLeft: "8px" }}>
                   {fmtDau(d.normDau)} DAU
                 </span>
-              </div>
+              </a>
             ))}
           </div>
         </div>
