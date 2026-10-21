@@ -23,6 +23,45 @@ const PIPELINE_NAMES: Record<string, string> = {
   "52357803":  "Bidmachine - Sign Ups",
 }
 
+// UA / Tricky pipelines: amount defaults to $125k per bundle if missing
+const UA_PIPELINES = new Set(["145970019", "867371640"])
+const UA_DEFAULT_GP = 125_000
+
+// Stages at "Signed or later" — weight = 1.0 regardless of hs_deal_stage_probability
+const SIGNED_STAGES = new Set([
+  // Bidmachine - Sales
+  "1256781119",  // Form Signed
+  "1422062203",  // Live
+  "1273609",     // Closed Won
+  "1120630322",  // Awaiting Credentials
+  "1406345612",  // MSA/Legal
+  // UA: Sales & AM
+  "1193765907",  // Signed / Ready to Onboard
+  "247773860",   // Onboarding
+  "247773861",   // Live - Learning
+  "247773862",   // Live - Scaling
+  // Bidmachine SDK DAU (Indirect)
+  "961285",      // Signed
+  "1452883551",  // AM Approved to Onboard
+  "1213494111",  // Integrating
+  "1213494112",  // Live & Testing
+  "1213493907",  // Fully Scaled
+  "1452899234",  // Sales Re-engagement
+  // UA Tricky
+  "1298083690",  // Committed / Signed
+  "1298083691",  // Setup: Company & Store Assets
+  "1333194814",  // Setup: Attribution Live
+  "1333172313",  // Setup: Sources & Bundles
+  "1333172314",  // Setup: Creatives Made
+  "1333172315",  // Trial Campaign Launched
+  "1311050835",  // Live Paid Campaign Launched
+  // Agentix
+  "1410103151",  // Live
+  // Bidmachine - Sign Ups
+  "107224655",   // Approved
+  "107224657",   // Live
+])
+
 function quarterInfo() {
   const now = new Date()
   const year = now.getUTCFullYear()
@@ -62,11 +101,18 @@ export async function GET() {
     for (const deal of deals) {
       const dau = parseFloat(deal.properties[DAU_PROP] ?? "0") || 0
       const pipelineId = deal.properties.pipeline ?? "unknown"
+      const stageId = deal.properties.dealstage ?? ""
       const amt = parseFloat(deal.properties.amount ?? "0") || 0
       const prob = parseFloat(deal.properties.hs_deal_stage_probability ?? "0") || 0
+
+      // GP rules: weight=1.0 if Signed or later, else stage probability
+      const weight = SIGNED_STAGES.has(stageId) ? 1.0 : prob
+      // UA/Tricky deals default to $125k per bundle if no amount
+      const gpAmount = UA_PIPELINES.has(pipelineId) ? (amt > 0 ? amt : UA_DEFAULT_GP) : amt
+
       totalNormDau += dau
-      rawGp += amt
-      weightedGp += amt * prob
+      rawGp += gpAmount
+      weightedGp += gpAmount * weight
 
       if (!byPipeline[pipelineId]) byPipeline[pipelineId] = { count: 0, normDau: 0, deals: [] }
       byPipeline[pipelineId].count++
