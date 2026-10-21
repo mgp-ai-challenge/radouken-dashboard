@@ -58,7 +58,8 @@ type MqlDeal = {
 type MqlData = {
   quarter: string
   mqlNormDau: number
-  totalGp: number
+  weightedGp: number
+  rawGp: number
   dealCount: number
   stillInMql: number
   mqlDealsList: MqlDeal[]
@@ -323,16 +324,17 @@ export default function MqlPage() {
           ) : data && (
             <>
               <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em" }}>
-                {fmtMoney(data.totalGp)}
+                {fmtMoney(data.weightedGp)}
               </p>
-              <div style={{ marginTop: "12px" }}>
+              <p style={{ fontSize: "10px", color: C.muted, marginTop: "6px" }}>
+                Pipeline: {fmtMoney(data.rawGp)}
+              </p>
+              <div style={{ marginTop: "10px" }}>
                 <div style={{ height: "3px", background: C.border, borderRadius: "99px", overflow: "hidden", position: "relative" }}>
                   <div style={{
                     height:       "100%",
-                    width:        `${Math.min((data.totalGp / GP_STRETCH) * 100, 100)}%`,
-                    background:   data.totalGp >= GP_TARGET
-                      ? `linear-gradient(90deg, ${C.accent}, ${C.accent})`
-                      : `linear-gradient(90deg, ${C.accent}, ${C.accent})`,
+                    width:        `${Math.min((data.weightedGp / GP_STRETCH) * 100, 100)}%`,
+                    background:   `linear-gradient(90deg, ${C.accent}, ${C.accent})`,
                     borderRadius: "99px",
                     transition:   "width 1.2s ease",
                   }} />
@@ -349,7 +351,7 @@ export default function MqlPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
                   <p style={{ fontSize: "10px", color: C.muted }}>
-                    {Math.round((data.totalGp / GP_TARGET) * 100)}% of $1.5M
+                    {Math.round((data.weightedGp / GP_TARGET) * 100)}% of $1.5M
                   </p>
                   <p style={{ fontSize: "10px", color: C.muted }}>
                     Stretch $1.8M

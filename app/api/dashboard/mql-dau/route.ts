@@ -51,18 +51,22 @@ export async function GET() {
           { propertyName: "lead_source", operator: "EQ", value: qLabel },
         ],
       ],
-      [DAU_PROP, "pipeline", "dealname", "dealstage", "hubspot_owner_id", "notes_last_updated", "amount"]
+      [DAU_PROP, "pipeline", "dealname", "dealstage", "hubspot_owner_id", "notes_last_updated", "amount", "hs_deal_stage_probability"]
     )
 
     let totalNormDau = 0
-    let totalGp = 0
+    let rawGp = 0
+    let weightedGp = 0
     const byPipeline: Record<string, { count: number; normDau: number; deals: Array<{ id: string; name: string; normDau: number }> }> = {}
 
     for (const deal of deals) {
       const dau = parseFloat(deal.properties[DAU_PROP] ?? "0") || 0
       const pipelineId = deal.properties.pipeline ?? "unknown"
+      const amt = parseFloat(deal.properties.amount ?? "0") || 0
+      const prob = parseFloat(deal.properties.hs_deal_stage_probability ?? "0") || 0
       totalNormDau += dau
-      totalGp += parseFloat(deal.properties.amount ?? "0") || 0
+      rawGp += amt
+      weightedGp += amt * prob
 
       if (!byPipeline[pipelineId]) byPipeline[pipelineId] = { count: 0, normDau: 0, deals: [] }
       byPipeline[pipelineId].count++
@@ -114,7 +118,8 @@ export async function GET() {
     return NextResponse.json({
       quarter,
       mqlNormDau: Math.round(totalNormDau),
-      totalGp: Math.round(totalGp),
+      weightedGp: Math.round(weightedGp),
+      rawGp: Math.round(rawGp),
       dealCount: deals.length,
       stillInMql: mqlDealsList.length,
       mqlDealsList,
