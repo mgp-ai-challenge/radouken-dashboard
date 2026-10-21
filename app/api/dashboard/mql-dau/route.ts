@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { searchDealsOr } from "@/lib/hubspot-deals"
 
 const DAU_PROP = "normalised_dau__us_dau__tier_1__065"
+const HS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN!
 
 const PIPELINE_NAMES: Record<string, string> = {
   "1273603":   "Bidmachine - Sales",
@@ -40,7 +41,7 @@ export async function GET() {
           { propertyName: "lead_source", operator: "EQ", value: qLabel },
         ],
       ],
-      [DAU_PROP, "pipeline", "dealname", "dealstage"]
+      [DAU_PROP, "pipeline", "dealname", "dealstage", "hubspot_owner_id", "notes_last_updated"]
     )
 
     let totalNormDau = 0
@@ -78,13 +79,48 @@ export async function GET() {
       .sort((a, b) => b.count - a.count)
 
     // Deals currently sitting in the MQL stage (stage 1157536)
-    const stillInMql = deals.filter((d) => d.properties.dealstage === "1157536").length
+    const mqlDeals = deals.filter((d) => d.properties.dealstage === "1157536")
+
+    // Resolve owner names in batch
+    const ownerIds = [...new Set(mqlDeals.map((d) => d.properties.hubspot_owner_id).filter(Boolean))]
+    const ownerNames: Record<string, string> = {}
+    for (const oid of ownerIds) {
+      try {
+        const res = await fetch(`https://api.hubapi.com/crm/v3/owners/${oid}`, {
+          headers: { Authorization: `Bearer ${HS_TOKEN}` },
+          cache: "no-store",
+        })
+        if (res.ok) {
+          const o = await res.json()
+          ownerNames[oid!] = [o.firstName, o.lastName].filter(Boolean).join(" ") || `Owner ${oid}`
+        }
+      } catch { /* skip */ }
+    }
+
+    const mqlDealsList = mqlDeals.map((d) => {
+      const ownerId = d.properties.hubspot_owner_id
+      return {
+        id: d.id,
+        name: d.properties.dealname ?? `Deal ${d.id}`,
+        normDau: Math.round(parseFloat(d.properties[DAU_PROP] ?? "0") || 0),
+        pipeline: PIPELINE_NAMES[d.properties.pipeline ?? ""] ?? d.properties.pipeline ?? "Unknown",
+        owner: ownerId ? (ownerNames[ownerId] ?? `Owner ${ownerId}`) : "Unassigned",
+        lastActivity: d.properties.notes_last_updated ?? null,
+      }
+    }).sort((a, b) => {
+      // Sort by last activity, nulls last
+      if (!a.lastActivity && !b.lastActivity) return 0
+      if (!a.lastActivity) return 1
+      if (!b.lastActivity) return -1
+      return b.lastActivity.localeCompare(a.lastActivity)
+    })
 
     return NextResponse.json({
       quarter,
       mqlNormDau: Math.round(totalNormDau),
       dealCount: deals.length,
-      stillInMql,
+      stillInMql: mqlDealsList.length,
+      mqlDealsList,
       pipelineSplit,
     })
   } catch (e) {

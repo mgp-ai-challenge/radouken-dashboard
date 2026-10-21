@@ -44,11 +44,21 @@ type PipelineRow = {
   deals: Array<{ id: string; name: string; normDau: number }>
 }
 
+type MqlDeal = {
+  id: string
+  name: string
+  normDau: number
+  pipeline: string
+  owner: string
+  lastActivity: string | null
+}
+
 type MqlData = {
   quarter: string
   mqlNormDau: number
   dealCount: number
   stillInMql: number
+  mqlDealsList: MqlDeal[]
   pipelineSplit: PipelineRow[]
 }
 
@@ -56,6 +66,13 @@ function fmtDau(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M"
   if (n >= 1_000) return (n / 1_000).toFixed(1) + "k"
   return n.toString()
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return "—"
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return "—"
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
 }
 
 function PipelineGroup({ row, total }: { row: PipelineRow; total: number }) {
@@ -416,41 +433,120 @@ export default function MqlPage() {
         </div>
       </div>
 
-      {/* Pipeline Split */}
-      <div style={{
-        background:   C.card,
-        border:       `1px solid ${C.border}`,
-        borderRadius: "16px",
-        padding:      "22px 24px",
-      }}>
-        <p style={{
-          fontSize:      "10px",
-          fontWeight:    700,
-          letterSpacing: "0.13em",
-          textTransform: "uppercase",
-          color:         C.muted,
-          marginBottom:  "14px",
+      {/* Pipeline Split + Deals still in MQL */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+        {/* Pipeline Split */}
+        <div style={{
+          background:   C.card,
+          border:       `1px solid ${C.border}`,
+          borderRadius: "16px",
+          padding:      "22px 24px",
         }}>
-          MQL Split by Pipeline {data ? `— ${data.quarter}` : ""}
-        </p>
+          <p style={{
+            fontSize:      "10px",
+            fontWeight:    700,
+            letterSpacing: "0.13em",
+            textTransform: "uppercase",
+            color:         C.muted,
+            marginBottom:  "14px",
+          }}>
+            MQL Split by Pipeline {data ? `— ${data.quarter}` : ""}
+          </p>
 
-        {loading ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} style={{ height: 48, borderRadius: "10px", background: C.cardAlt }} />
-            ))}
-          </div>
-        ) : error ? (
-          <p style={{ fontSize: "12px", color: C.red }}>Could not load pipeline data</p>
-        ) : data && data.pipelineSplit.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-            {data.pipelineSplit.map((row) => (
-              <PipelineGroup key={row.pipelineId} row={row} total={data.dealCount} />
-            ))}
-          </div>
-        ) : (
-          <p style={{ fontSize: "12px", color: C.muted, textAlign: "center", padding: "20px 0" }}>No MQL data</p>
-        )}
+          {loading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} style={{ height: 48, borderRadius: "10px", background: C.cardAlt }} />
+              ))}
+            </div>
+          ) : error ? (
+            <p style={{ fontSize: "12px", color: C.red }}>Could not load pipeline data</p>
+          ) : data && data.pipelineSplit.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              {data.pipelineSplit.map((row) => (
+                <PipelineGroup key={row.pipelineId} row={row} total={data.dealCount} />
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: "12px", color: C.muted, textAlign: "center", padding: "20px 0" }}>No MQL data</p>
+          )}
+        </div>
+
+        {/* Deals still in MQL */}
+        <div style={{
+          background:   C.card,
+          border:       `1px solid ${C.border}`,
+          borderRadius: "16px",
+          padding:      "22px 24px",
+          overflowY:    "auto",
+          maxHeight:    "600px",
+        }}>
+          <p style={{
+            fontSize:      "10px",
+            fontWeight:    700,
+            letterSpacing: "0.13em",
+            textTransform: "uppercase",
+            color:         C.muted,
+            marginBottom:  "14px",
+          }}>
+            Deals Still in MQL {data ? `— ${data.stillInMql}` : ""}
+          </p>
+
+          {loading ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} style={{ height: 48, borderRadius: "10px", background: C.cardAlt }} />
+              ))}
+            </div>
+          ) : error ? (
+            <p style={{ fontSize: "12px", color: C.red }}>Could not load data</p>
+          ) : data && data.mqlDealsList.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              {data.mqlDealsList.map((d) => (
+                <a
+                  key={d.id}
+                  href={`https://app.hubspot.com/contacts/5606823/deal/${d.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display:        "flex",
+                    alignItems:     "center",
+                    gap:            "10px",
+                    padding:        "8px 10px",
+                    borderRadius:   "8px",
+                    background:     C.cardAlt,
+                    textDecoration: "none",
+                    transition:     "background 0.15s",
+                    cursor:         "pointer",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = C.border }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = C.cardAlt }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: "12px", fontWeight: 600, color: C.sage, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {d.name}
+                    </p>
+                    <div style={{ display: "flex", gap: "8px", marginTop: "3px", fontSize: "10px", color: C.muted }}>
+                      <span>{d.owner}</span>
+                      <span style={{ opacity: 0.4 }}>·</span>
+                      <span>{d.pipeline}</span>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <p style={{ fontSize: "11px", fontFamily: MONO, color: C.sage, margin: 0 }}>
+                      {fmtDau(d.normDau)} DAU
+                    </p>
+                    <p style={{ fontSize: "9px", color: C.muted, margin: 0, marginTop: "2px" }}>
+                      {d.lastActivity ? `Last activity ${fmtDate(d.lastActivity)}` : "No activity"}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: "12px", color: C.muted, textAlign: "center", padding: "20px 0" }}>No deals in MQL stage</p>
+          )}
+        </div>
       </div>
     </div>
   )
