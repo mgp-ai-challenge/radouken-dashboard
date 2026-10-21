@@ -25,6 +25,8 @@ const C = {
 const MONO = "'JetBrains Mono', 'Cascadia Code', 'SF Mono', ui-monospace, monospace"
 
 const MQL_TARGET = 140
+const GP_TARGET = 1_500_000
+const GP_STRETCH = 1_800_000
 
 const PIPELINE_COLORS: Record<string, string> = {
   "1273603":   "#4c9ef5", // Bidmachine - Sales (blue)
@@ -56,6 +58,7 @@ type MqlDeal = {
 type MqlData = {
   quarter: string
   mqlNormDau: number
+  totalGp: number
   dealCount: number
   stillInMql: number
   mqlDealsList: MqlDeal[]
@@ -66,6 +69,12 @@ function fmtDau(n: number) {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + "M"
   if (n >= 1_000) return (n / 1_000).toFixed(1) + "k"
   return n.toString()
+}
+
+function fmtMoney(n: number) {
+  if (n >= 1_000_000) return "$" + (n / 1_000_000).toFixed(2) + "M"
+  if (n >= 1_000) return "$" + (n / 1_000).toFixed(1) + "k"
+  return "$" + n.toLocaleString("en-US")
 }
 
 function fmtDate(iso: string | null): string {
@@ -286,7 +295,71 @@ export default function MqlPage() {
       </div>
 
       {/* Top KPI row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "12px" }}>
+        {/* Gross Profit */}
+        <div style={{
+          background:   C.card,
+          border:       `1px solid ${C.border}`,
+          borderRadius: "14px",
+          padding:      "20px 22px",
+          position:     "relative",
+          overflow:     "hidden",
+        }}>
+          <div style={{
+            position:     "absolute",
+            left:         0, top: "18%", bottom: "18%",
+            width:        "3px",
+            borderRadius: "0 3px 3px 0",
+            background:   C.accent,
+            opacity:      0.9,
+          }} />
+          <p style={{ fontSize: "9.5px", fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted, marginBottom: "8px" }}>
+            Gross Profit
+          </p>
+          {loading ? (
+            <div style={{ height: 40, width: 100, borderRadius: "8px", background: C.cardAlt }} />
+          ) : error ? (
+            <p style={{ fontSize: "12px", color: C.red }}>Error</p>
+          ) : data && (
+            <>
+              <p style={{ fontSize: "36px", fontWeight: 700, lineHeight: 1, color: C.sageLight, fontFamily: MONO, letterSpacing: "-0.025em" }}>
+                {fmtMoney(data.totalGp)}
+              </p>
+              <div style={{ marginTop: "12px" }}>
+                <div style={{ height: "3px", background: C.border, borderRadius: "99px", overflow: "hidden", position: "relative" }}>
+                  <div style={{
+                    height:       "100%",
+                    width:        `${Math.min((data.totalGp / GP_STRETCH) * 100, 100)}%`,
+                    background:   data.totalGp >= GP_TARGET
+                      ? `linear-gradient(90deg, ${C.accent}, ${C.accent})`
+                      : `linear-gradient(90deg, ${C.accent}, ${C.accent})`,
+                    borderRadius: "99px",
+                    transition:   "width 1.2s ease",
+                  }} />
+                  {/* Target marker */}
+                  <div style={{
+                    position:     "absolute",
+                    left:         `${(GP_TARGET / GP_STRETCH) * 100}%`,
+                    top:          "-2px",
+                    width:        "1px",
+                    height:       "7px",
+                    background:   C.sage,
+                    opacity:      0.5,
+                  }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
+                  <p style={{ fontSize: "10px", color: C.muted }}>
+                    {Math.round((data.totalGp / GP_TARGET) * 100)}% of $1.5M
+                  </p>
+                  <p style={{ fontSize: "10px", color: C.muted }}>
+                    Stretch $1.8M
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
         {/* MQL Count */}
         <div style={{
           background:   C.card,
