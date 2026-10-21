@@ -2,7 +2,17 @@ import { NextResponse } from "next/server"
 import { searchDealsOr } from "@/lib/hubspot-deals"
 
 const DAU_PROP = "normalised_dau__us_dau__tier_1__065"
-const HS_TOKEN = process.env.HUBSPOT_ACCESS_TOKEN!
+
+const OWNER_NAMES: Record<string, string> = {
+  "85618920":   "Nathan Boyer",
+  "93649099":   "Jade Graves",
+  "9728358":    "Joel Chang",
+  "18768155":   "Randy Barenscott",
+  "91133237":   "Dan Owens",
+  "63973247":   "Rachel Lu",
+  "73143157":   "Rosa Ru",
+  "61862887":   "Paul Childs",
+}
 
 const PIPELINE_NAMES: Record<string, string> = {
   "1273603":   "Bidmachine - Sales",
@@ -81,22 +91,6 @@ export async function GET() {
     // Deals currently sitting in the MQL stage (stage 1157536)
     const mqlDeals = deals.filter((d) => d.properties.dealstage === "1157536")
 
-    // Resolve owner names in batch
-    const ownerIds = [...new Set(mqlDeals.map((d) => d.properties.hubspot_owner_id).filter(Boolean))]
-    const ownerNames: Record<string, string> = {}
-    for (const oid of ownerIds) {
-      try {
-        const res = await fetch(`https://api.hubapi.com/crm/v3/owners/${oid}`, {
-          headers: { Authorization: `Bearer ${HS_TOKEN}` },
-          cache: "no-store",
-        })
-        if (res.ok) {
-          const o = await res.json()
-          ownerNames[oid!] = [o.firstName, o.lastName].filter(Boolean).join(" ") || `Owner ${oid}`
-        }
-      } catch { /* skip */ }
-    }
-
     const mqlDealsList = mqlDeals.map((d) => {
       const ownerId = d.properties.hubspot_owner_id
       return {
@@ -104,7 +98,7 @@ export async function GET() {
         name: d.properties.dealname ?? `Deal ${d.id}`,
         normDau: Math.round(parseFloat(d.properties[DAU_PROP] ?? "0") || 0),
         pipeline: PIPELINE_NAMES[d.properties.pipeline ?? ""] ?? d.properties.pipeline ?? "Unknown",
-        owner: ownerId ? (ownerNames[ownerId] ?? `Owner ${ownerId}`) : "Unassigned",
+        owner: ownerId ? (OWNER_NAMES[ownerId] ?? `Owner ${ownerId}`) : "Unassigned",
         lastActivity: d.properties.notes_last_updated ?? null,
       }
     }).sort((a, b) => {
