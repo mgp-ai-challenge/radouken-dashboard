@@ -54,10 +54,14 @@ export interface SelfServeDeal {
 export interface GpResult {
   id: string
   name: string
+  usDau: number
+  tier1Dau: number
   normalisedDau: number
   category: Category | null
+  rate: number | null
   gp: number | null
   gpRange?: [number, number]
+  approvedAt: string | null
 }
 
 export function computeNormalisedDau(d: SelfServeDeal): number {
@@ -97,14 +101,21 @@ export function computeCohort(deals: SelfServeDeal[], start: string, endExclusiv
 
   const results: GpResult[] = cohort.map((d) => {
     const nd = computeNormalisedDau(d)
+    const usDau = d.usDau ?? 0
+    const tier1Dau = d.tier1Dau ?? 0
     const category = classify(d)
     if (!category) {
       return {
-        id: d.id, name: d.name, normalisedDau: nd, category: null, gp: null,
+        id: d.id, name: d.name, usDau, tier1Dau, normalisedDau: nd,
+        category: null, rate: null, gp: null, approvedAt: d.approvedAt,
         gpRange: [potentialGp(nd, MIN_RATE), potentialGp(nd, MAX_RATE)] as [number, number],
       }
     }
-    return { id: d.id, name: d.name, normalisedDau: nd, category, gp: potentialGp(nd, RATES[category]) }
+    const rate = RATES[category]
+    return {
+      id: d.id, name: d.name, usDau, tier1Dau, normalisedDau: nd,
+      category, rate, gp: potentialGp(nd, rate), approvedAt: d.approvedAt,
+    }
   })
 
   const classified = results.filter((r) => r.gp != null)

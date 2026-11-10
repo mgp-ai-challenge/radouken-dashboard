@@ -195,8 +195,17 @@ const PRIORITY_COLOR: Record<string, string> = {
 export default function DashboardPage() {
   const [ssKpis, setSsKpis] = useState<SelfServeKpis | null>(null)
   const [ssKpisLoading, setSsKpisLoading] = useState(true)
-  const [ssGp, setSsGp] = useState<{ quarter: string; totalGp: number; publishers: number; classifiedCount: number; unclassifiedCount: number; unclassifiedRange: [number, number] } | null>(null)
+  const [ssGp, setSsGp] = useState<{
+    quarter: string; totalGp: number; publishers: number; classifiedCount: number;
+    unclassifiedCount: number; unclassifiedRange: [number, number];
+    results: Array<{
+      id: string; name: string; usDau: number; tier1Dau: number; normalisedDau: number;
+      category: string | null; rate: number | null; gp: number | null;
+      gpRange?: [number, number]; approvedAt: string | null;
+    }>
+  } | null>(null)
   const [ssGpLoading, setSsGpLoading] = useState(true)
+  const [showSsGpDetail, setShowSsGpDetail] = useState(false)
   const [okrs, setOkrs] = useState<OkrData | null>(null)
   const [okrsLoading, setOkrsLoading] = useState(true)
   const [culture, setCulture] = useState<CultureScore | null>(null)
@@ -575,6 +584,103 @@ export default function DashboardPage() {
       </div>
 
       </div>
+
+      {/* Self-Serve GP Detail */}
+      {ssGp && !ssGpLoading && (
+        <div>
+          <button
+            onClick={() => setShowSsGpDetail((v) => !v)}
+            style={{
+              display: "flex", alignItems: "center", gap: "6px",
+              background: "transparent", border: `1px solid ${C.border}`, borderRadius: "10px",
+              padding: "8px 16px", fontSize: "12px", fontWeight: 600, color: C.sage,
+              cursor: "pointer", transition: "border-color 0.2s", fontFamily: "'Outfit', system-ui, sans-serif",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#f5a623" }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border }}
+          >
+            {showSsGpDetail ? "▾" : "▸"} Self-Serve GP Breakdown — {ssGp.publishers} publishers
+          </button>
+
+          {showSsGpDetail && (
+            <div style={{
+              background: C.card, border: `1px solid ${C.border}`, borderRadius: "16px",
+              padding: "24px", marginTop: "12px", fontFamily: "'Outfit', system-ui, sans-serif",
+              overflowX: "auto",
+            }}>
+              <p style={{ fontSize: "14px", fontWeight: 700, color: C.sageLight, marginBottom: "4px" }}>
+                Self-Serve Potential GP — {ssGp.quarter}
+              </p>
+              <p style={{ fontSize: "11px", color: C.muted, marginBottom: "16px" }}>
+                GP = Norm DAU × rate × 365 × 17.5% · Norm DAU = US DAU + 0.65 × Tier-1 DAU · Pipeline 52357803 only · Cohort: entered Approved in quarter
+              </p>
+
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px" }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                    {["Deal", "Approved", "Category", "US DAU", "T1 DAU", "Norm DAU", "Rate", "GP"].map((h) => (
+                      <th key={h} style={{
+                        textAlign: h === "Deal" ? "left" : "right", padding: "6px 8px",
+                        fontSize: "9px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: C.muted,
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...ssGp.results].sort((a, b) => (b.gp ?? 0) - (a.gp ?? 0)).map((d) => (
+                    <tr key={d.id} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                      <td style={{ padding: "6px 8px", color: C.sage }}>
+                        <a
+                          href={`https://app.hubspot.com/contacts/5606823/deal/${d.id}`}
+                          target="_blank" rel="noopener noreferrer"
+                          style={{ color: C.sage, textDecoration: "none" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "#f5a623" }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = C.sage }}
+                        >{d.name}</a>
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", color: C.muted, fontSize: "10px" }}>
+                        {d.approvedAt ? new Date(d.approvedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—"}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", color: d.category ? C.sage : C.red, fontSize: "10px" }}>
+                        {d.category ?? "Unclassified"}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, color: C.muted }}>
+                        {d.usDau.toLocaleString()}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, color: C.muted }}>
+                        {d.tier1Dau.toLocaleString()}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, color: C.sage }}>
+                        {Math.round(d.normalisedDau).toLocaleString()}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, color: C.muted, fontSize: "10px" }}>
+                        {d.rate != null ? d.rate.toFixed(4) : "—"}
+                      </td>
+                      <td style={{ padding: "6px 8px", textAlign: "right", fontFamily: MONO, fontWeight: 600, color: d.gp != null ? C.sageLight : C.muted }}>
+                        {d.gp != null ? `$${Math.round(d.gp).toLocaleString()}` : d.gpRange ? `$${Math.round(d.gpRange[0]).toLocaleString()} – $${Math.round(d.gpRange[1]).toLocaleString()}` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr style={{ borderTop: `2px solid ${C.border}` }}>
+                    <td colSpan={7} style={{ padding: "8px 8px", fontWeight: 700, color: C.sage }}>
+                      Total Potential GP ({ssGp.classifiedCount} classified)
+                    </td>
+                    <td style={{ padding: "8px 8px", textAlign: "right", fontFamily: MONO, fontWeight: 700, fontSize: "13px", color: "#f5a623" }}>
+                      ${ssGp.totalGp.toLocaleString()}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              {ssGp.unclassifiedCount > 0 && (
+                <p style={{ fontSize: "10px", color: "#f5a623", marginTop: "12px" }}>
+                  {ssGp.unclassifiedCount} unclassified deal{ssGp.unclassifiedCount > 1 ? "s" : ""} excluded from total — range: ${ssGp.unclassifiedRange[0].toLocaleString()} – ${ssGp.unclassifiedRange[1].toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Culture Score + Activity */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "12px" }}>
