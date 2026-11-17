@@ -42,6 +42,8 @@ type PipelineRow = {
   pipelineName: string
   count: number
   normDau: number
+  weightedGp: number
+  rawGp: number
   pct: number
   deals: Array<{ id: string; name: string; normDau: number }>
 }
@@ -180,6 +182,15 @@ function PipelineGroup({ row, total }: { row: PipelineRow; total: number }) {
         }}>
           {row.pct}%
         </span>
+        {row.weightedGp > 0 && (
+          <span style={{
+            fontSize:   "10px",
+            fontFamily: MONO,
+            color:      C.accent,
+          }}>
+            {fmtMoney(row.weightedGp)}
+          </span>
+        )}
         <span style={{
           fontSize: "10px",
           color:    C.muted,
@@ -212,6 +223,11 @@ function PipelineGroup({ row, total }: { row: PipelineRow; total: number }) {
             color:      C.muted,
           }}>
             <span>Norm DAU: <span style={{ fontFamily: MONO, color: C.sage }}>{fmtDau(row.normDau)}</span></span>
+            <span style={{ opacity: 0.4 }}>·</span>
+            <span>GP: <span style={{ fontFamily: MONO, color: C.accent }}>{fmtMoney(row.weightedGp)}</span></span>
+            {row.rawGp !== row.weightedGp && (
+              <span style={{ fontSize: "9px" }}>(pipeline {fmtMoney(row.rawGp)})</span>
+            )}
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "3px", maxHeight: "200px", overflowY: "auto" }}>
             {row.deals.map((d) => (

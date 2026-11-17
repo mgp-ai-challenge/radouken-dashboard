@@ -163,7 +163,7 @@ export async function GET() {
     let weightedGp = 0
     const gpIncluded: Array<{ id: string; name: string; pipeline: string; stage: string; amount: number; gpAmount: number; weight: number; weightLabel: string; dealGp: number }> = []
     const gpExcluded: Array<{ id: string; name: string; pipeline: string; stage: string; reason: string; amount: number }> = []
-    const byPipeline: Record<string, { count: number; normDau: number; deals: Array<{ id: string; name: string; normDau: number }> }> = {}
+    const byPipeline: Record<string, { count: number; normDau: number; weightedGp: number; rawGp: number; deals: Array<{ id: string; name: string; normDau: number }> }> = {}
 
     for (const deal of deals) {
       const dau = parseFloat(deal.properties[DAU_PROP] ?? "0") || 0
@@ -176,6 +176,8 @@ export async function GET() {
       const stageName = EXCLUDED_STAGES[stageId] ?? STAGE_NAMES[stageId] ?? stageId
 
       totalNormDau += dau
+
+      if (!byPipeline[pipelineId]) byPipeline[pipelineId] = { count: 0, normDau: 0, weightedGp: 0, rawGp: 0, deals: [] }
 
       // Excluded deals: Qualified Out / Closed Lost — don't count in GP
       if (EXCLUDED_STAGES[stageId]) {
@@ -191,13 +193,14 @@ export async function GET() {
 
         rawGp += gpAmount
         weightedGp += dealGp
+        byPipeline[pipelineId].weightedGp += dealGp
+        byPipeline[pipelineId].rawGp += gpAmount
 
         if (gpAmount > 0) {
           gpIncluded.push({ id: deal.id, name: dealName, pipeline: pipelineName, stage: stageName, amount: amt, gpAmount, weight, weightLabel, dealGp: Math.round(dealGp) })
         }
       }
 
-      if (!byPipeline[pipelineId]) byPipeline[pipelineId] = { count: 0, normDau: 0, deals: [] }
       byPipeline[pipelineId].count++
       byPipeline[pipelineId].normDau += dau
       byPipeline[pipelineId].deals.push({
@@ -218,6 +221,8 @@ export async function GET() {
         pipelineName: PIPELINE_NAMES[id] ?? id,
         count: data.count,
         normDau: Math.round(data.normDau),
+        weightedGp: Math.round(data.weightedGp),
+        rawGp: Math.round(data.rawGp),
         pct: Math.round((data.count / deals.length) * 100),
         deals: data.deals,
       }))
